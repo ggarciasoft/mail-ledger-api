@@ -20,6 +20,7 @@ public class MailLedgerDbContext : DbContext
     public DbSet<Rule> Rules => Set<Rule>();
     public DbSet<FinancialRecord> FinancialRecords => Set<FinancialRecord>();
     public DbSet<ExtractionVersion> ExtractionVersions => Set<ExtractionVersion>();
+    public DbSet<ExtractionCandidate> ExtractionCandidates => Set<ExtractionCandidate>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

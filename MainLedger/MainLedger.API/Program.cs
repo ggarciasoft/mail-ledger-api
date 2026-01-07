@@ -50,6 +50,14 @@ namespace MainLedger.API
             builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IClassificationService,
                 MainLedger.Integrations.Services.OpenAIClassificationService>();
 
+            // Register Extraction Service
+            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IExtractionService,
+                MainLedger.Integrations.Services.OpenAIExtractionService>();
+
+            // Register Normalization Service
+            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.INormalizationService,
+                MainLedger.Application.Services.NormalizationService>();
+
             // Register Gmail Integration
             builder.Services.Configure<MainLedger.Domain.Settings.GmailSettings>(
                 builder.Configuration.GetSection(MainLedger.Domain.Settings.GmailSettings.SectionName));

@@ -28,6 +28,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
     private readonly IClassificationService _classificationService;
+    private readonly IExtractionService _extractionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SyncGmailEmailsCommandHandler> _logger;
 
@@ -38,6 +39,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
         IClassificationService classificationService,
+        IExtractionService extractionService,
         IUnitOfWork unitOfWork,
         ILogger<SyncGmailEmailsCommandHandler> logger)
     {
@@ -47,6 +49,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         _ruleRepository = ruleRepository;
         _rulesEngine = rulesEngine;
         _classificationService = classificationService;
+        _extractionService = extractionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -114,6 +117,27 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
                     _logger.LogInformation(
                         "Email {MessageId} classified: IsFinancial={IsFinancial}, Category={Category}, Confidence={Confidence}",
                         email.MessageId, classification.IsFinancial, classification.Category, classification.Confidence.Value);
+                    
+                    // Extract financial data if email is financial
+                    if (classification.IsFinancial)
+                    {
+                        try
+                        {
+                            var extraction = await _extractionService.ExtractFinancialDataAsync(email, cancellationToken);
+                            
+                            _logger.LogInformation(
+                                "Email {MessageId} extraction: Amount={Amount} {Currency}, Merchant={Merchant}",
+                                email.MessageId, extraction.Amount, extraction.Currency, extraction.Merchant);
+                            
+                            // Note: ExtractionCandidate creation will be handled separately
+                            // For now, we just log the extraction result
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Extraction failed for email {MessageId}", email.MessageId);
+                            // Continue to save email even if extraction fails
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
