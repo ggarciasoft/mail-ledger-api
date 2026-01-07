@@ -1,4 +1,5 @@
 using MainLedger.Domain.Common;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.ValueObjects;
 
 namespace MainLedger.Domain.Entities;
@@ -19,6 +20,9 @@ public sealed class EmailMessage : Entity
     public string ContentHash { get; private set; }
     public bool IsProcessed { get; private set; }
     public DateTime? ProcessedAt { get; private set; }
+    public ProcessingDirective? Directive { get; private set; }
+    public string? DirectiveReason { get; private set; }
+    public Guid? MatchedRuleId { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
     private EmailMessage(
@@ -76,6 +80,19 @@ public sealed class EmailMessage : Entity
             bodyText,
             contentHash,
             DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Sets the processing directive from rules engine evaluation.
+    /// </summary>
+    public void SetDirective(RuleEvaluationResult evaluation)
+    {
+        if (evaluation == null)
+            throw new ArgumentNullException(nameof(evaluation));
+
+        Directive = evaluation.Directive;
+        DirectiveReason = evaluation.Reason;
+        MatchedRuleId = evaluation.MatchedRuleId;
     }
 
     /// <summary>

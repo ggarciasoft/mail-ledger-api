@@ -14,6 +14,7 @@ public sealed class Rule : Entity
     public string? SenderPattern { get; private set; }
     public string? SubjectPattern { get; private set; }
     public string? KeywordPattern { get; private set; }
+    public string? LabelPattern { get; private set; }
     public bool IsActive { get; private set; }
     public int Priority { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -26,6 +27,7 @@ public sealed class Rule : Entity
         string? senderPattern,
         string? subjectPattern,
         string? keywordPattern,
+        string? labelPattern,
         int priority,
         DateTime createdAt) : base(id)
     {
@@ -40,6 +42,7 @@ public sealed class Rule : Entity
         SenderPattern = senderPattern;
         SubjectPattern = subjectPattern;
         KeywordPattern = keywordPattern;
+        LabelPattern = labelPattern;
         Priority = priority;
         IsActive = true;
         CreatedAt = createdAt;
@@ -54,6 +57,7 @@ public sealed class Rule : Entity
         string? senderPattern = null,
         string? subjectPattern = null,
         string? keywordPattern = null,
+        string? labelPattern = null,
         int priority = 0)
     {
         return new Rule(
@@ -63,6 +67,7 @@ public sealed class Rule : Entity
             senderPattern,
             subjectPattern,
             keywordPattern,
+            labelPattern,
             priority,
             DateTime.UtcNow);
     }
@@ -110,11 +115,13 @@ public sealed class Rule : Entity
     public void UpdatePatterns(
         string? senderPattern = null,
         string? subjectPattern = null,
-        string? keywordPattern = null)
+        string? keywordPattern = null,
+        string? labelPattern = null)
     {
         SenderPattern = senderPattern;
         SubjectPattern = subjectPattern;
         KeywordPattern = keywordPattern;
+        LabelPattern = labelPattern;
         UpdatedAt = DateTime.UtcNow;
     }
 

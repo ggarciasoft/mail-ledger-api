@@ -1,0 +1,16 @@
+using MainLedger.Domain.Entities;
+
+namespace MainLedger.Domain.Repositories;
+
+/// <summary>
+/// Repository interface for EmailMessage entity.
+/// </summary>
+public interface IEmailMessageRepository
+{
+    Task<EmailMessage?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<EmailMessage?> GetByMessageIdAsync(string messageId, CancellationToken cancellationToken = default);
+    Task<bool> ExistsByContentHashAsync(string contentHash, CancellationToken cancellationToken = default);
+    Task<List<EmailMessage>> GetUnprocessedAsync(Guid userId, int limit, CancellationToken cancellationToken = default);
+    Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default);
+    void Update(EmailMessage message);
+}
