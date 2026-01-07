@@ -23,6 +23,13 @@ public sealed class EmailMessage : Entity
     public ProcessingDirective? Directive { get; private set; }
     public string? DirectiveReason { get; private set; }
     public Guid? MatchedRuleId { get; private set; }
+    
+    // Classification fields
+    public bool? IsFinancial { get; private set; }
+    public EmailCategory? Category { get; private set; }
+    public Confidence? ClassificationConfidence { get; private set; }
+    public DateTime? ClassifiedAt { get; private set; }
+    
     public DateTime CreatedAt { get; private set; }
 
     private EmailMessage(
@@ -93,6 +100,20 @@ public sealed class EmailMessage : Entity
         Directive = evaluation.Directive;
         DirectiveReason = evaluation.Reason;
         MatchedRuleId = evaluation.MatchedRuleId;
+    }
+
+    /// <summary>
+    /// Sets the classification result from AI classification.
+    /// </summary>
+    public void SetClassification(bool isFinancial, EmailCategory? category, Confidence confidence)
+    {
+        if (confidence == null)
+            throw new ArgumentNullException(nameof(confidence));
+
+        IsFinancial = isFinancial;
+        Category = category;
+        ClassificationConfidence = confidence;
+        ClassifiedAt = DateTime.UtcNow;
     }
 
     /// <summary>

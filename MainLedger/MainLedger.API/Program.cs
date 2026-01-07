@@ -43,6 +43,13 @@ namespace MainLedger.API
             builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IRulesEngine,
                 MainLedger.Application.Services.RulesEngine>();
 
+            // Register Classification Service
+            builder.Services.Configure<MainLedger.Domain.Settings.OpenAISettings>(
+                builder.Configuration.GetSection(MainLedger.Domain.Settings.OpenAISettings.SectionName));
+            
+            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IClassificationService,
+                MainLedger.Integrations.Services.OpenAIClassificationService>();
+
             // Register Gmail Integration
             builder.Services.Configure<MainLedger.Domain.Settings.GmailSettings>(
                 builder.Configuration.GetSection(MainLedger.Domain.Settings.GmailSettings.SectionName));

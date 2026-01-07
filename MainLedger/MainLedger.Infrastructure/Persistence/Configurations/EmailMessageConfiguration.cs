@@ -77,6 +77,22 @@ public class EmailMessageConfiguration : IEntityTypeConfiguration<EmailMessage>
         builder.Property(e => e.MatchedRuleId)
             .HasColumnName("matched_rule_id");
 
+        // Classification fields
+        builder.Property(e => e.IsFinancial)
+            .HasColumnName("is_financial");
+
+        builder.Property(e => e.Category)
+            .HasColumnName("category")
+            .HasConversion<string?>()
+            .HasMaxLength(50);
+
+        builder.Property(e => e.ClassificationConfidence)
+            .HasColumnName("classification_confidence")
+            .HasConversion(new ConfidenceConverter());
+
+        builder.Property(e => e.ClassifiedAt)
+            .HasColumnName("classified_at");
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -103,5 +119,11 @@ public class EmailMessageConfiguration : IEntityTypeConfiguration<EmailMessage>
 
         builder.HasIndex(e => e.Directive)
             .HasDatabaseName("ix_email_messages_directive");
+
+        builder.HasIndex(e => e.IsFinancial)
+            .HasDatabaseName("ix_email_messages_is_financial");
+
+        builder.HasIndex(e => e.Category)
+            .HasDatabaseName("ix_email_messages_category");
     }
 }

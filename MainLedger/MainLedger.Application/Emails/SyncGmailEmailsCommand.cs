@@ -27,6 +27,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
+    private readonly IClassificationService _classificationService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SyncGmailEmailsCommandHandler> _logger;
 
@@ -36,6 +37,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         IEmailMessageRepository emailRepository,
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
+        IClassificationService classificationService,
         IUnitOfWork unitOfWork,
         ILogger<SyncGmailEmailsCommandHandler> logger)
     {
@@ -44,6 +46,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         _emailRepository = emailRepository;
         _ruleRepository = ruleRepository;
         _rulesEngine = rulesEngine;
+        _classificationService = classificationService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -102,6 +105,22 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
             // Only save emails that should be processed
             if (evaluation.ShouldProcess)
             {
+                // Classify the email using AI
+                try
+                {
+                    var classification = await _classificationService.ClassifyEmailAsync(email, cancellationToken);
+                    email.SetClassification(classification.IsFinancial, classification.Category, classification.Confidence);
+                    
+                    _logger.LogInformation(
+                        "Email {MessageId} classified: IsFinancial={IsFinancial}, Category={Category}, Confidence={Confidence}",
+                        email.MessageId, classification.IsFinancial, classification.Category, classification.Confidence.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Classification failed for email {MessageId}, saving without classification", email.MessageId);
+                    // Continue to save email even if classification fails
+                }
+                
                 await _emailRepository.AddAsync(email, cancellationToken);
                 savedCount++;
             }
