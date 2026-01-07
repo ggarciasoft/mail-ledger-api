@@ -30,6 +30,10 @@ public sealed class EmailMessage : Entity
     public Confidence? ClassificationConfidence { get; private set; }
     public DateTime? ClassifiedAt { get; private set; }
     
+    // Processing status tracking
+    public EmailProcessingStatus ProcessingStatus { get; private set; }
+    public string? ProcessingError { get; private set; }
+    
     public DateTime CreatedAt { get; private set; }
 
     private EmailMessage(
@@ -60,6 +64,7 @@ public sealed class EmailMessage : Entity
         BodyText = bodyText ?? string.Empty;
         ContentHash = contentHash;
         IsProcessed = false;
+        ProcessingStatus = EmailProcessingStatus.Pending;
         CreatedAt = createdAt;
     }
 
@@ -128,6 +133,20 @@ public sealed class EmailMessage : Entity
 
         IsProcessed = true;
         ProcessedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates the processing status of the email.
+    /// </summary>
+    public void SetProcessingStatus(EmailProcessingStatus status, string? error = null)
+    {
+        ProcessingStatus = status;
+        ProcessingError = error;
+
+        if (status == EmailProcessingStatus.Extracted)
+        {
+            MarkAsProcessed();
+        }
     }
 
     // For EF Core

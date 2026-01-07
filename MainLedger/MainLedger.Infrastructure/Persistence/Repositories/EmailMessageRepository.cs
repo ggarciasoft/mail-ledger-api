@@ -44,6 +44,33 @@ public class EmailMessageRepository : IEmailMessageRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<EmailMessage>> GetByProcessingStatusAsync(
+        Guid userId,
+        Domain.Enums.EmailProcessingStatus status,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailMessages
+            .Where(e => e.UserId == userId && e.ProcessingStatus == status)
+            .OrderBy(e => e.ReceivedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<EmailMessage>> GetClassifiedFinancialEmailsAsync(
+        Guid userId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailMessages
+            .Where(e => e.UserId == userId 
+                && e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified
+                && e.IsFinancial == true)
+            .OrderBy(e => e.ReceivedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         await _context.EmailMessages.AddAsync(message, cancellationToken);

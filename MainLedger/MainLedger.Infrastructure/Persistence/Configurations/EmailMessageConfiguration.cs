@@ -93,6 +93,17 @@ public class EmailMessageConfiguration : IEntityTypeConfiguration<EmailMessage>
         builder.Property(e => e.ClassifiedAt)
             .HasColumnName("classified_at");
 
+        // Processing status tracking
+        builder.Property(e => e.ProcessingStatus)
+            .HasColumnName("processing_status")
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(e => e.ProcessingError)
+            .HasColumnName("processing_error")
+            .HasMaxLength(1000);
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
@@ -125,5 +136,8 @@ public class EmailMessageConfiguration : IEntityTypeConfiguration<EmailMessage>
 
         builder.HasIndex(e => e.Category)
             .HasDatabaseName("ix_email_messages_category");
+
+        builder.HasIndex(e => e.ProcessingStatus)
+            .HasDatabaseName("ix_email_messages_processing_status");
     }
 }

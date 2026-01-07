@@ -11,6 +11,8 @@ public interface IEmailMessageRepository
     Task<EmailMessage?> GetByMessageIdAsync(string messageId, CancellationToken cancellationToken = default);
     Task<bool> ExistsByContentHashAsync(string contentHash, CancellationToken cancellationToken = default);
     Task<List<EmailMessage>> GetUnprocessedAsync(Guid userId, int limit, CancellationToken cancellationToken = default);
+    Task<List<EmailMessage>> GetByProcessingStatusAsync(Guid userId, Enums.EmailProcessingStatus status, int limit, CancellationToken cancellationToken = default);
+    Task<List<EmailMessage>> GetClassifiedFinancialEmailsAsync(Guid userId, int limit, CancellationToken cancellationToken = default);
     Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default);
     void Update(EmailMessage message);
 }
