@@ -1,0 +1,6 @@
+@MainLedger.API_HostAddress = http://localhost:5032
+
+GET {{MainLedger.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
