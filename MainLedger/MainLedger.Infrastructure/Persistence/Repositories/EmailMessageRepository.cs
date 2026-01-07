@@ -71,6 +71,78 @@ public class EmailMessageRepository : IEmailMessageRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<EmailMessage> Emails, int TotalCount)> GetPagedAsync(
+        Guid userId,
+        Domain.Enums.EmailProcessingStatus? status,
+        bool? isFinancial,
+        int page,
+        int pageSize,
+        string sortBy,
+        string sortOrder,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.EmailMessages.Where(e => e.UserId == userId);
+
+        // Apply filters
+        if (status.HasValue)
+        {
+            query = query.Where(e => e.ProcessingStatus == status.Value);
+        }
+
+        if (isFinancial.HasValue)
+        {
+            query = query.Where(e => e.IsFinancial == isFinancial.Value);
+        }
+
+        // Get total count before pagination
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        // Apply sorting
+        query = sortBy.ToLowerInvariant() switch
+        {
+            "subject" => sortOrder.ToLowerInvariant() == "asc" 
+                ? query.OrderBy(e => e.Subject) 
+                : query.OrderByDescending(e => e.Subject),
+            "from" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(e => e.From.Value)
+                : query.OrderByDescending(e => e.From.Value),
+            "processingStatus" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(e => e.ProcessingStatus)
+                : query.OrderByDescending(e => e.ProcessingStatus),
+            _ => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(e => e.ReceivedAt)
+                : query.OrderByDescending(e => e.ReceivedAt)
+        };
+
+        // Apply pagination
+        var emails = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (emails, totalCount);
+    }
+
+    public async Task<Domain.Models.EmailStatistics> GetStatisticsAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var emails = await _context.EmailMessages
+            .Where(e => e.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        return new Domain.Models.EmailStatistics
+        {
+            TotalEmails = emails.Count,
+            Pending = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Pending),
+            Classified = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified),
+            Extracted = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Extracted),
+            Failed = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Failed),
+            FinancialEmails = emails.Count(e => e.IsFinancial == true),
+            NonFinancialEmails = emails.Count(e => e.IsFinancial == false)
+        };
+    }
+
     public async Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         await _context.EmailMessages.AddAsync(message, cancellationToken);

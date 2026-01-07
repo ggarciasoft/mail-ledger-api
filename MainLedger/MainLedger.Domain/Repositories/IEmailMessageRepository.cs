@@ -13,6 +13,16 @@ public interface IEmailMessageRepository
     Task<List<EmailMessage>> GetUnprocessedAsync(Guid userId, int limit, CancellationToken cancellationToken = default);
     Task<List<EmailMessage>> GetByProcessingStatusAsync(Guid userId, Enums.EmailProcessingStatus status, int limit, CancellationToken cancellationToken = default);
     Task<List<EmailMessage>> GetClassifiedFinancialEmailsAsync(Guid userId, int limit, CancellationToken cancellationToken = default);
+    Task<(List<EmailMessage> Emails, int TotalCount)> GetPagedAsync(
+        Guid userId,
+        Enums.EmailProcessingStatus? status,
+        bool? isFinancial,
+        int page,
+        int pageSize,
+        string sortBy,
+        string sortOrder,
+        CancellationToken cancellationToken = default);
+    Task<Models.EmailStatistics> GetStatisticsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default);
     void Update(EmailMessage message);
 }

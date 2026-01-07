@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MainLedger.Contracts\MainLedger.Contracts.csproj" />
     <ProjectReference Include="..\MainLedger.Domain\MainLedger.Domain.csproj" />
   </ItemGroup>
 
