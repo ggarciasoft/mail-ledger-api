@@ -14,6 +14,8 @@ public sealed class AuditLog : Entity
     public string Action { get; private set; }
     public DateTime Timestamp { get; private set; }
     public string? Changes { get; private set; }
+    public string? IpAddress { get; private set; }
+    public string? UserAgent { get; private set; }
 
     private AuditLog(
         Guid id,
@@ -22,7 +24,9 @@ public sealed class AuditLog : Entity
         Guid entityId,
         string action,
         DateTime timestamp,
-        string? changes) : base(id)
+        string? changes,
+        string? ipAddress,
+        string? userAgent) : base(id)
     {
         if (string.IsNullOrWhiteSpace(entityType))
             throw new ArgumentException("Entity type cannot be empty.", nameof(entityType));
@@ -35,6 +39,8 @@ public sealed class AuditLog : Entity
         Action = action;
         Timestamp = timestamp;
         Changes = changes;
+        IpAddress = ipAddress;
+        UserAgent = userAgent;
     }
 
     /// <summary>
@@ -45,7 +51,9 @@ public sealed class AuditLog : Entity
         string entityType,
         Guid entityId,
         string action,
-        string? changes = null)
+        string? changes = null,
+        string? ipAddress = null,
+        string? userAgent = null)
     {
         return new AuditLog(
             Guid.NewGuid(),
@@ -54,9 +62,16 @@ public sealed class AuditLog : Entity
             entityId,
             action,
             DateTime.UtcNow,
-            changes);
+            changes,
+            ipAddress,
+            userAgent);
     }
 
     // For EF Core
-    private AuditLog() : base() { }
+    private AuditLog() : base() 
+    {
+        EntityType = null!;
+        Action = null!;
+    }
 }
+

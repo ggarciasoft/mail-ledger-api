@@ -1,5 +1,5 @@
 ---
-trigger: always_on
+trigger: manual
 ---
 
 \# PHASE 1 — CORE PIPELINE (Weeks 1–3)
@@ -261,4 +261,3 @@ confidence
 
 
 \- Hash content + amount + date
-

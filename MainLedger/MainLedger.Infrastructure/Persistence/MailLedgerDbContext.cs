@@ -22,6 +22,12 @@ public class MailLedgerDbContext : DbContext
     public DbSet<ExtractionVersion> ExtractionVersions => Set<ExtractionVersion>();
     public DbSet<ExtractionCandidate> ExtractionCandidates => Set<ExtractionCandidate>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    
+    // Authentication entities
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,3 +47,4 @@ public class MailLedgerDbContext : DbContext
         return await base.SaveChangesAsync(cancellationToken);
     }
 }
+

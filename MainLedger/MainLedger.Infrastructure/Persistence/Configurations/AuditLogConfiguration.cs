@@ -45,6 +45,14 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             .HasColumnName("changes")
             .HasColumnType("jsonb"); // PostgreSQL JSONB for efficient querying
 
+        builder.Property(a => a.IpAddress)
+            .HasColumnName("ip_address")
+            .HasMaxLength(45); // IPv6 max length
+
+        builder.Property(a => a.UserAgent)
+            .HasColumnName("user_agent")
+            .HasMaxLength(500);
+
         // Relationships
         builder.HasOne<User>()
             .WithMany()
@@ -69,3 +77,4 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             .HasDatabaseName("ix_audit_logs_entity_type_id");
     }
 }
+

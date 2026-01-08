@@ -5,30 +5,143 @@ namespace MainLedger.Domain.Entities;
 
 /// <summary>
 /// Represents a user of the MailLedger system.
+/// Aggregate root for authentication and user management.
 /// </summary>
 public sealed class User : Entity
 {
     public EmailAddress Email { get; private set; }
-    public DateTime CreatedAt { get; private set; }
+    public string PasswordHash { get; private set; }
+    public string FirstName { get; private set; }
+    public string LastName { get; private set; }
+    public bool IsEmailVerified { get; private set; }
     public bool IsActive { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; }
+    public DateTime? LastLoginAt { get; private set; }
 
-    private User(Guid id, EmailAddress email, DateTime createdAt, bool isActive) : base(id)
+    private User(
+        Guid id, 
+        EmailAddress email, 
+        string passwordHash,
+        string firstName,
+        string lastName,
+        bool isEmailVerified,
+        bool isActive,
+        DateTime createdAt,
+        DateTime updatedAt,
+        DateTime? lastLoginAt) : base(id)
     {
         Email = email ?? throw new ArgumentNullException(nameof(email));
-        CreatedAt = createdAt;
+        PasswordHash = passwordHash ?? throw new ArgumentNullException(nameof(passwordHash));
+        FirstName = firstName ?? throw new ArgumentNullException(nameof(firstName));
+        LastName = lastName ?? throw new ArgumentNullException(nameof(lastName));
+        IsEmailVerified = isEmailVerified;
         IsActive = isActive;
+        CreatedAt = createdAt;
+        UpdatedAt = updatedAt;
+        LastLoginAt = lastLoginAt;
     }
 
     /// <summary>
-    /// Creates a new user.
+    /// Registers a new user with hashed password.
     /// </summary>
+    public static User Register(EmailAddress email, string passwordHash, string firstName, string lastName)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+            throw new ArgumentException("Password hash cannot be empty.", nameof(passwordHash));
+        if (string.IsNullOrWhiteSpace(firstName))
+            throw new ArgumentException("First name cannot be empty.", nameof(firstName));
+        if (string.IsNullOrWhiteSpace(lastName))
+            throw new ArgumentException("Last name cannot be empty.", nameof(lastName));
+
+        var now = DateTime.UtcNow;
+        return new User(
+            Guid.NewGuid(),
+            email,
+            passwordHash,
+            firstName,
+            lastName,
+            isEmailVerified: false,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+            lastLoginAt: null);
+    }
+
+    /// <summary>
+    /// Creates a new user (legacy method for backward compatibility).
+    /// </summary>
+    [Obsolete("Use Register method instead for new user creation with authentication.")]
     public static User Create(EmailAddress email)
     {
         return new User(
             Guid.NewGuid(),
             email,
-            DateTime.UtcNow,
-            isActive: true);
+            string.Empty, // Will need to be set separately
+            string.Empty,
+            string.Empty,
+            isEmailVerified: false,
+            isActive: true,
+            createdAt: DateTime.UtcNow,
+            updatedAt: DateTime.UtcNow,
+            lastLoginAt: null);
+    }
+
+    /// <summary>
+    /// Verifies the user's email address.
+    /// </summary>
+    public void VerifyEmail()
+    {
+        IsEmailVerified = true;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Changes the user's password.
+    /// </summary>
+    public void ChangePassword(string newPasswordHash)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+            throw new ArgumentException("Password hash cannot be empty.", nameof(newPasswordHash));
+
+        PasswordHash = newPasswordHash;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Resets the user's password (used for password reset flow).
+    /// </summary>
+    public void ResetPassword(string newPasswordHash)
+    {
+        if (string.IsNullOrWhiteSpace(newPasswordHash))
+            throw new ArgumentException("Password hash cannot be empty.", nameof(newPasswordHash));
+
+        PasswordHash = newPasswordHash;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Updates the user's profile information.
+    /// </summary>
+    public void UpdateProfile(string firstName, string lastName)
+    {
+        if (string.IsNullOrWhiteSpace(firstName))
+            throw new ArgumentException("First name cannot be empty.", nameof(firstName));
+        if (string.IsNullOrWhiteSpace(lastName))
+            throw new ArgumentException("Last name cannot be empty.", nameof(lastName));
+
+        FirstName = firstName;
+        LastName = lastName;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Records a successful login.
+    /// </summary>
+    public void RecordLogin()
+    {
+        LastLoginAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -37,6 +150,7 @@ public sealed class User : Entity
     public void Deactivate()
     {
         IsActive = false;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -45,8 +159,15 @@ public sealed class User : Entity
     public void Activate()
     {
         IsActive = true;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     // For EF Core
-    private User() : base() { }
+    private User() : base() 
+    {
+        Email = null!;
+        PasswordHash = null!;
+        FirstName = null!;
+        LastName = null!;
+    }
 }

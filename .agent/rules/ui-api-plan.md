@@ -1,5 +1,5 @@
 ---
-alwaysApply: true
+trigger: manual
 ---
 
 UI-Facing API Layer - Implementation Plan

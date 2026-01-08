@@ -26,13 +26,41 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasConversion(new EmailAddressConverter());
 
+        builder.Property(u => u.PasswordHash)
+            .HasColumnName("password_hash")
+            .HasMaxLength(500)
+            .IsRequired();
+
+        builder.Property(u => u.FirstName)
+            .HasColumnName("first_name")
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(u => u.LastName)
+            .HasColumnName("last_name")
+            .HasMaxLength(100)
+            .IsRequired();
+
+        builder.Property(u => u.IsEmailVerified)
+            .HasColumnName("is_email_verified")
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(u => u.IsActive)
+            .HasColumnName("is_active")
+            .IsRequired()
+            .HasDefaultValue(true);
+
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();
 
-        builder.Property(u => u.IsActive)
-            .HasColumnName("is_active")
+        builder.Property(u => u.UpdatedAt)
+            .HasColumnName("updated_at")
             .IsRequired();
+
+        builder.Property(u => u.LastLoginAt)
+            .HasColumnName("last_login_at");
 
         // Indexes
         builder.HasIndex(u => u.Email)
@@ -41,5 +69,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(u => u.IsActive)
             .HasDatabaseName("ix_users_is_active");
+
+        builder.HasIndex(u => u.IsEmailVerified)
+            .HasDatabaseName("ix_users_is_email_verified");
     }
 }
+
