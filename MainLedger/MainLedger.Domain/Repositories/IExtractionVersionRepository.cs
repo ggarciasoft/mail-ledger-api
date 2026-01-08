@@ -7,6 +7,7 @@ namespace MainLedger.Domain.Repositories;
 /// </summary>
 public interface IExtractionVersionRepository
 {
+    Task<ExtractionVersion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ExtractionVersion?> GetActiveAsync(CancellationToken cancellationToken = default);
     Task<ExtractionVersion?> GetByVersionAsync(string version, CancellationToken cancellationToken = default);
     Task AddAsync(ExtractionVersion version, CancellationToken cancellationToken = default);

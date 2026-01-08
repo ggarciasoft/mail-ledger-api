@@ -17,6 +17,12 @@ public class ExtractionVersionRepository : IExtractionVersionRepository
         _context = context;
     }
 
+    public async Task<ExtractionVersion?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.ExtractionVersions
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+    }
+
     public async Task<ExtractionVersion?> GetActiveAsync(CancellationToken cancellationToken = default)
     {
         return await _context.ExtractionVersions
