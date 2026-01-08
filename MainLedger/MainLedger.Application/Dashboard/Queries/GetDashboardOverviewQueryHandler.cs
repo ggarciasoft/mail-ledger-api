@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.Dashboard.Queries;
 
-public class GetDashboardOverviewQueryHandler : IRequest Handler<GetDashboardOverviewQuery, DashboardOverviewDto>
+public class GetDashboardOverviewQueryHandler : IRequestHandler<GetDashboardOverviewQuery, DashboardOverviewDto>
 {
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IExtractionCandidateRepository _candidateRepository;
@@ -50,13 +50,13 @@ public class GetDashboardOverviewQueryHandler : IRequest Handler<GetDashboardOve
         // Build recent activity (simplified - could be enhanced with actual activity tracking)
         var recentActivity = new List<RecentActivityDto>();
         
-        if (emailStats.LastSyncAt.HasValue)
+        if (lastSyncAt.HasValue)
         {
             recentActivity.Add(new RecentActivityDto
             {
                 Type = "EmailSynced",
                 Count = emailStats.TotalEmails,
-                Timestamp = emailStats.LastSyncAt.Value
+                Timestamp = lastSyncAt.Value
             });
         }
 
