@@ -1,3 +1,5 @@
+using MainLedger.Domain.Services;
+
 namespace MainLedger.Infrastructure.Security;
 
 /// <summary>
@@ -37,3 +39,4 @@ public class PasswordHasher : IPasswordHasher
         }
     }
 }
+

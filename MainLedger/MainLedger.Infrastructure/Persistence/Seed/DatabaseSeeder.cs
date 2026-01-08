@@ -1,7 +1,8 @@
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.ValueObjects;
-using MainLedger.Infrastructure.Security;
+using MainLedger.Domain.Services;
 using Microsoft.EntityFrameworkCore;
+using MainLedger.Infrastructure.Security;
 
 namespace MainLedger.Infrastructure.Persistence.Seed;
 
