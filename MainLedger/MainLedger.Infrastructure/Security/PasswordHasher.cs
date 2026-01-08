@@ -6,7 +6,7 @@ namespace MainLedger.Infrastructure.Security;
 /// BCrypt-based password hasher implementation.
 /// Uses BCrypt.Net library for secure password hashing.
 /// </summary>
-public class PasswordHasher : IPasswordHasher
+public class PasswordHasher : Domain.Services.IPasswordHasher
 {
     /// <summary>
     /// Hashes a plain text password using BCrypt.
