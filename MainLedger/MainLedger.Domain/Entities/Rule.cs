@@ -126,6 +126,18 @@ public sealed class Rule : Entity
     }
 
     /// <summary>
+    /// Updates the rule name.
+    /// </summary>
+    public void UpdateName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Rule name cannot be empty.", nameof(name));
+
+        Name = name;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
     /// Updates the rule priority.
     /// </summary>
     public void UpdatePriority(int priority)

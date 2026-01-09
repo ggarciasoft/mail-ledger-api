@@ -17,6 +17,15 @@ public class RuleRepository : IRuleRepository
         _context = context;
     }
 
+    public async Task<List<Rule>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Rules
+            .Where(r => r.UserId == userId)
+            .OrderByDescending(r => r.Priority)
+            .ThenBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<List<Rule>> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _context.Rules

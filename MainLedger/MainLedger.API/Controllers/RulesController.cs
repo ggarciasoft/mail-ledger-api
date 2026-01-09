@@ -32,7 +32,7 @@ public class RulesController : ControllerBase
     }
 
     /// <summary>
-    /// Gets all active rules for the current user.
+    /// Gets all rules for the current user (both active and inactive).
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetUserRules(CancellationToken cancellationToken)
@@ -46,7 +46,7 @@ public class RulesController : ControllerBase
 
         try
         {
-            var rules = await _ruleRepository.GetActiveByUserIdAsync(userId.Value, cancellationToken);
+            var rules = await _ruleRepository.GetByUserIdAsync(userId.Value, cancellationToken);
             return Ok(rules.Select(r => new
             {
                 id = r.Id,
@@ -157,6 +157,95 @@ public class RulesController : ControllerBase
         }
         catch (Exception ex)
         {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Updates a rule (name, patterns, and/or priority).
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateRule(
+        Guid id,
+        [FromBody] UpdateRuleRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rule = await _ruleRepository.GetByIdAsync(id, cancellationToken);
+            if (rule == null)
+            {
+                return NotFound(new { error = "Rule not found." });
+            }
+
+            // Update name if provided
+            if (!string.IsNullOrWhiteSpace(request.Name))
+            {
+                rule.UpdateName(request.Name);
+            }
+
+            // Update patterns
+            rule.UpdatePatterns(
+                request.SenderPattern,
+                request.SubjectPattern,
+                request.KeywordPattern,
+                request.LabelPattern
+            );
+
+            // Update priority if provided
+            if (request.Priority.HasValue)
+            {
+                rule.UpdatePriority(request.Priority.Value);
+            }
+
+            _ruleRepository.Update(rule);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { message = "Rule updated successfully" });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid rule update request for rule {RuleId}", id);
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating rule {RuleId}", id);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Updates a rule's name.
+    /// </summary>
+    [HttpPut("{id}/name")]
+    public async Task<IActionResult> UpdateRuleName(
+        Guid id,
+        [FromBody] UpdateRuleNameRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rule = await _ruleRepository.GetByIdAsync(id, cancellationToken);
+            if (rule == null)
+            {
+                return NotFound(new { error = "Rule not found." });
+            }
+
+            rule.UpdateName(request.Name);
+            _ruleRepository.Update(rule);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { message = "Rule name updated successfully" });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid rule name for rule {RuleId}", id);
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating rule name for {RuleId}", id);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -287,6 +376,17 @@ public record CreateRuleRequest(
     string? LabelPattern,
     int? Priority
 );
+
+public record UpdateRuleRequest(
+    string? Name,
+    string? SenderPattern,
+    string? SubjectPattern,
+    string? KeywordPattern,
+    string? LabelPattern,
+    int? Priority
+);
+
+public record UpdateRuleNameRequest(string Name);
 
 public record UpdateRulePatternsRequest(
     string? SenderPattern,
