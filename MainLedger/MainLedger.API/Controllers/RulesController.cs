@@ -1,36 +1,52 @@
+using MainLedger.Application.Authentication.Services;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainLedger.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class RulesController : ControllerBase
 {
     private readonly IRuleRepository _ruleRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<RulesController> _logger;
 
     public RulesController(
         IRuleRepository ruleRepository,
         IUserRepository userRepository,
-        IUnitOfWork unitOfWork)
+        ICurrentUserService currentUserService,
+        IUnitOfWork unitOfWork,
+        ILogger<RulesController> logger)
     {
         _ruleRepository = ruleRepository;
         _userRepository = userRepository;
+        _currentUserService = currentUserService;
         _unitOfWork = unitOfWork;
+        _logger = logger;
     }
 
     /// <summary>
-    /// Gets all active rules for a user.
+    /// Gets all active rules for the current user.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetUserRules([FromQuery] Guid userId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetUserRules(CancellationToken cancellationToken)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var rules = await _ruleRepository.GetActiveByUserIdAsync(userId, cancellationToken);
+            var rules = await _ruleRepository.GetActiveByUserIdAsync(userId.Value, cancellationToken);
             return Ok(rules.Select(r => new
             {
                 id = r.Id,
@@ -46,6 +62,7 @@ public class RulesController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error getting rules for user {UserId}", userId);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -56,17 +73,24 @@ public class RulesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateRule([FromBody] CreateRuleRequest request, CancellationToken cancellationToken)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
             // Verify user exists
-            var userExists = await _userRepository.ExistsAsync(request.UserId, cancellationToken);
+            var userExists = await _userRepository.ExistsAsync(userId.Value, cancellationToken);
             if (!userExists)
             {
                 return BadRequest(new { error = "User not found." });
             }
 
             var rule = Rule.Create(
-                request.UserId,
+                userId.Value,
                 request.Name,
                 request.SenderPattern,
                 request.SubjectPattern,
@@ -97,6 +121,7 @@ public class RulesController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error creating rule for user {UserId}", userId);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -255,7 +280,6 @@ public class RulesController : ControllerBase
 
 // Request DTOs
 public record CreateRuleRequest(
-    Guid UserId,
     string Name,
     string? SenderPattern,
     string? SubjectPattern,

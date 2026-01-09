@@ -1,8 +1,10 @@
+using MainLedger.Application.Authentication.Services;
 using MainLedger.Application.Emails.Queries;
 using MainLedger.Contracts.Common;
 using MainLedger.Contracts.Emails;
 using MainLedger.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainLedger.API.Controllers;
@@ -12,14 +14,20 @@ namespace MainLedger.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class EmailsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<EmailsController> _logger;
 
-    public EmailsController(IMediator mediator, ILogger<EmailsController> logger)
+    public EmailsController(
+        IMediator mediator,
+        ICurrentUserService currentUserService,
+        ILogger<EmailsController> logger)
     {
         _mediator = mediator;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -28,7 +36,6 @@ public class EmailsController : ControllerBase
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<EmailListItemDto>>> GetEmails(
-        [FromQuery] Guid userId,
         [FromQuery] EmailProcessingStatus? status = null,
         [FromQuery] bool? isFinancial = null,
         [FromQuery] int page = 1,
@@ -37,9 +44,16 @@ public class EmailsController : ControllerBase
         [FromQuery] string sortOrder = "desc",
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetEmailsQuery(userId, status, isFinancial, page, pageSize, sortBy, sortOrder);
+            var query = new GetEmailsQuery(userId.Value, status, isFinancial, page, pageSize, sortBy, sortOrder);
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -56,12 +70,18 @@ public class EmailsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<EmailDto>> GetEmailById(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetEmailByIdQuery(id, userId);
+            var query = new GetEmailByIdQuery(id, userId.Value);
             var result = await _mediator.Send(query, cancellationToken);
 
             if (result == null)
@@ -83,12 +103,18 @@ public class EmailsController : ControllerBase
     /// </summary>
     [HttpGet("statistics")]
     public async Task<ActionResult<EmailStatisticsDto>> GetStatistics(
-        [FromQuery] Guid userId,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetEmailStatisticsQuery(userId);
+            var query = new GetEmailStatisticsQuery(userId.Value);
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }

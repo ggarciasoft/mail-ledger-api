@@ -1,7 +1,9 @@
+using MainLedger.Application.Authentication.Services;
 using MainLedger.Application.FinancialRecords.Queries;
 using MainLedger.Contracts.Common;
 using MainLedger.Contracts.FinancialRecords;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainLedger.API.Controllers;
@@ -12,14 +14,20 @@ namespace MainLedger.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/financial-records")]
+[Authorize]
 public class FinancialRecordsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<FinancialRecordsController> _logger;
 
-    public FinancialRecordsController(IMediator mediator, ILogger<FinancialRecordsController> logger)
+    public FinancialRecordsController(
+        IMediator mediator,
+        ICurrentUserService currentUserService,
+        ILogger<FinancialRecordsController> logger)
     {
         _mediator = mediator;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -28,7 +36,6 @@ public class FinancialRecordsController : ControllerBase
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<FinancialRecordListItemDto>>> GetRecords(
-        [FromQuery] Guid userId,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
         [FromQuery] decimal? minAmount = null,
@@ -42,10 +49,17 @@ public class FinancialRecordsController : ControllerBase
         [FromQuery] string sortOrder = "desc",
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
             var query = new GetFinancialRecordsQuery(
-                userId, startDate, endDate, minAmount, maxAmount,
+                userId.Value, startDate, endDate, minAmount, maxAmount,
                 merchant, currency, sourceBank, page, pageSize, sortBy, sortOrder);
             
             var result = await _mediator.Send(query, cancellationToken);
@@ -64,12 +78,18 @@ public class FinancialRecordsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<FinancialRecordDto>> GetById(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetFinancialRecordByIdQuery(id, userId);
+            var query = new GetFinancialRecordByIdQuery(id, userId.Value);
             var result = await _mediator.Send(query, cancellationToken);
 
             if (result == null)
@@ -91,14 +111,20 @@ public class FinancialRecordsController : ControllerBase
     /// </summary>
     [HttpGet("statistics")]
     public async Task<ActionResult<FinancialRecordStatisticsDto>> GetStatistics(
-        [FromQuery] Guid userId,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetFinancialRecordStatisticsQuery(userId, startDate, endDate);
+            var query = new GetFinancialRecordStatisticsQuery(userId.Value, startDate, endDate);
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }

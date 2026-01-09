@@ -1,7 +1,9 @@
 using MainLedger.Application.Authentication.Commands;
 using MainLedger.Application.Authentication.Queries;
+using MainLedger.Application.Authentication.Services;
 using MainLedger.Contracts.Authentication;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainLedger.API.Controllers;
@@ -11,15 +13,20 @@ namespace MainLedger.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/api-keys")]
-// [Authorize] // TODO: Add authorization
+[Authorize]
 public class ApiKeysController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ApiKeysController> _logger;
 
-    public ApiKeysController(IMediator mediator, ILogger<ApiKeysController> logger)
+    public ApiKeysController(
+        IMediator mediator,
+        ICurrentUserService currentUserService,
+        ILogger<ApiKeysController> logger)
     {
         _mediator = mediator;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -31,13 +38,17 @@ public class ApiKeysController : ControllerBase
         [FromBody] CreateApiKeyRequest request,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            // TODO: Get userId from authenticated user
-            var userId = Guid.Empty; // Placeholder
-
             var command = new CreateApiKeyCommand(
-                userId,
+                userId.Value,
                 request.Name,
                 request.Scopes,
                 request.ExpiresAt);
@@ -59,7 +70,7 @@ public class ApiKeysController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating API key");
+            _logger.LogError(ex, "Error creating API key for user {UserId}", userId);
             return StatusCode(500, new { error = "An error occurred while creating the API key" });
         }
     }
@@ -71,19 +82,23 @@ public class ApiKeysController : ControllerBase
     public async Task<ActionResult<List<Application.Authentication.Queries.ApiKeyDto>>> ListApiKeys(
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            // TODO: Get userId from authenticated user
-            var userId = Guid.Empty; // Placeholder
-
-            var query = new ListApiKeysQuery(userId);
+            var query = new ListApiKeysQuery(userId.Value);
             var result = await _mediator.Send(query, cancellationToken);
 
             return Ok(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error listing API keys");
+            _logger.LogError(ex, "Error listing API keys for user {UserId}", userId);
             return StatusCode(500, new { error = "An error occurred while listing API keys" });
         }
     }
@@ -96,12 +111,16 @@ public class ApiKeysController : ControllerBase
         [FromRoute] Guid id,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            // TODO: Get userId from authenticated user
-            var userId = Guid.Empty; // Placeholder
-
-            var command = new RevokeApiKeyCommand(userId, id);
+            var command = new RevokeApiKeyCommand(userId.Value, id);
             var result = await _mediator.Send(command, cancellationToken);
 
             if (result)
@@ -113,17 +132,17 @@ public class ApiKeysController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "API key {ApiKeyId} not found", id);
+            _logger.LogWarning(ex, "API key {ApiKeyId} not found for user {UserId}", id, userId);
             return NotFound(new { error = ex.Message });
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Unauthorized access to API key {ApiKeyId}", id);
+            _logger.LogWarning(ex, "Unauthorized access to API key {ApiKeyId} by user {UserId}", id, userId);
             return Unauthorized(new { error = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error revoking API key {ApiKeyId}", id);
+            _logger.LogError(ex, "Error revoking API key {ApiKeyId} for user {UserId}", id, userId);
             return StatusCode(500, new { error = "An error occurred while revoking the API key" });
         }
     }

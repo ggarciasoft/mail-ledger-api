@@ -1,9 +1,11 @@
+using MainLedger.Application.Authentication.Services;
 using MainLedger.Application.ExtractionCandidates.Commands;
 using MainLedger.Application.ExtractionCandidates.Queries;
 using MainLedger.Contracts.Common;
 using MainLedger.Contracts.ExtractionCandidates;
 using MainLedger.Domain.Enums;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainLedger.API.Controllers;
@@ -13,14 +15,20 @@ namespace MainLedger.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/extraction-candidates")]
+[Authorize]
 public class ExtractionCandidatesController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ExtractionCandidatesController> _logger;
 
-    public ExtractionCandidatesController(IMediator mediator, ILogger<ExtractionCandidatesController> logger)
+    public ExtractionCandidatesController(
+        IMediator mediator,
+        ICurrentUserService currentUserService,
+        ILogger<ExtractionCandidatesController> logger)
     {
         _mediator = mediator;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 
@@ -29,7 +37,6 @@ public class ExtractionCandidatesController : ControllerBase
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<ExtractionCandidateListItemDto>>> GetCandidates(
-        [FromQuery] Guid userId,
         [FromQuery] RecordStatus? status = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -37,9 +44,16 @@ public class ExtractionCandidatesController : ControllerBase
         [FromQuery] string sortOrder = "desc",
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetExtractionCandidatesQuery(userId, status, page, pageSize, sortBy, sortOrder);
+            var query = new GetExtractionCandidatesQuery(userId.Value, status, page, pageSize, sortBy, sortOrder);
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -56,12 +70,18 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ExtractionCandidateDto>> GetById(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var query = new GetExtractionCandidateByIdQuery(id, userId);
+            var query = new GetExtractionCandidateByIdQuery(id, userId.Value);
             var result = await _mediator.Send(query, cancellationToken);
 
             if (result == null)
@@ -84,12 +104,18 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpPost("{id}/confirm")]
     public async Task<IActionResult> Confirm(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var command = new ConfirmExtractionCandidateCommand(id, userId);
+            var command = new ConfirmExtractionCandidateCommand(id, userId.Value);
             var financialRecordId = await _mediator.Send(command, cancellationToken);
 
             return Ok(new
@@ -124,13 +150,19 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpPost("{id}/reject")]
     public async Task<IActionResult> Reject(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         [FromBody] RejectExtractionRequest request,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
-            var command = new RejectExtractionCandidateCommand(id, userId, request.Reason);
+            var command = new RejectExtractionCandidateCommand(id, userId.Value, request.Reason);
             await _mediator.Send(command, cancellationToken);
 
             return Ok(new { success = true, message = "Extraction rejected" });
@@ -160,14 +192,20 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(
         [FromRoute] Guid id,
-        [FromQuery] Guid userId,
         [FromBody] UpdateExtractionRequest request,
         CancellationToken cancellationToken = default)
     {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
         try
         {
             var command = new UpdateExtractionCandidateCommand(
-                id, userId,
+                id, userId.Value,
                 request.Amount, request.Currency, request.Merchant,
                 request.TransactionDate, request.SourceAccount, request.TargetAccount,
                 request.SourceBank, request.TargetBank, request.Fees, request.Tax, request.ReferenceId);
