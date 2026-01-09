@@ -143,6 +143,34 @@ public class EmailMessageRepository : IEmailMessageRepository
         };
     }
 
+    public async Task<int> CountByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailMessages
+            .Where(e => e.UserId == userId)
+            .CountAsync(cancellationToken);
+    }
+
+    public async Task<List<Domain.Models.SyncHistoryItem>> GetSyncHistoryAsync(
+        Guid userId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        // Group emails by the date they were created (synced) and count them
+        var syncHistory = await _context.EmailMessages
+            .Where(e => e.UserId == userId)
+            .GroupBy(e => e.CreatedAt.Date)
+            .Select(g => new Domain.Models.SyncHistoryItem
+            {
+                SyncedAt = g.Key,
+                EmailCount = g.Count()
+            })
+            .OrderByDescending(s => s.SyncedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+        return syncHistory;
+    }
+
     public async Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         await _context.EmailMessages.AddAsync(message, cancellationToken);

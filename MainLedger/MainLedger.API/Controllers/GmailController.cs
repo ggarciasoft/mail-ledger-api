@@ -158,4 +158,58 @@ public class GmailController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Get Gmail connection status for the current user.
+    /// </summary>
+    [HttpGet("status")]
+    public async Task<IActionResult> GetConnectionStatus(CancellationToken cancellationToken)
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var query = new MainLedger.Application.Gmail.Queries.GetGmailConnectionStatusQuery(userId.Value);
+            var result = await _mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Gmail connection status for user {UserId}", userId);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get sync history for the current user.
+    /// </summary>
+    [HttpGet("sync-history")]
+    public async Task<IActionResult> GetSyncHistory(
+        [FromQuery] int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var query = new MainLedger.Application.Gmail.Queries.GetSyncHistoryQuery(userId.Value, limit);
+            var result = await _mediator.Send(query, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting sync history for user {UserId}", userId);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
