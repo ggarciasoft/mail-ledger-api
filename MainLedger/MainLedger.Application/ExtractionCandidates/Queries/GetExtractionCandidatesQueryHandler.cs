@@ -6,7 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.ExtractionCandidates.Queries;
 
-public class GetExtractionCandidatesQueryHandler : IRequestHandler<GetExtractionCandidatesQuery, PaginatedResponse<ExtractionCandidateListItemDto>>
+public class GetExtractionCandidatesQueryHandler
+    : IRequestHandler<
+        GetExtractionCandidatesQuery,
+        PaginatedResponse<ExtractionCandidateListItemDto>
+    >
 {
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IEmailMessageRepository _emailRepository;
@@ -15,7 +19,8 @@ public class GetExtractionCandidatesQueryHandler : IRequestHandler<GetExtraction
     public GetExtractionCandidatesQueryHandler(
         IExtractionCandidateRepository candidateRepository,
         IEmailMessageRepository emailRepository,
-        ILogger<GetExtractionCandidatesQueryHandler> logger)
+        ILogger<GetExtractionCandidatesQueryHandler> logger
+    )
     {
         _candidateRepository = candidateRepository;
         _emailRepository = emailRepository;
@@ -24,11 +29,16 @@ public class GetExtractionCandidatesQueryHandler : IRequestHandler<GetExtraction
 
     public async Task<PaginatedResponse<ExtractionCandidateListItemDto>> Handle(
         GetExtractionCandidatesQuery request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Getting extraction candidates for user {UserId}: Page={Page}, PageSize={PageSize}, Status={Status}",
-            request.UserId, request.Page, request.PageSize, request.Status);
+            request.UserId,
+            request.Page,
+            request.PageSize,
+            request.Status
+        );
 
         // Validate pagination
         var page = Math.Max(1, request.Page);
@@ -42,39 +52,53 @@ public class GetExtractionCandidatesQueryHandler : IRequestHandler<GetExtraction
             pageSize,
             request.SortBy,
             request.SortOrder,
-            cancellationToken);
+            cancellationToken
+        );
 
-        // Get email subjects for all candidates
+        // Get email details for all candidates
         var emailIds = candidates.Select(c => c.EmailMessageId).Distinct().ToList();
-        var emails = new Dictionary<Guid, string>();
-        
+        var emails = new Dictionary<Guid, Domain.Entities.EmailMessage>();
+
         foreach (var emailId in emailIds)
         {
             var email = await _emailRepository.GetByIdAsync(emailId, cancellationToken);
             if (email != null)
             {
-                emails[emailId] = email.Subject;
+                emails[emailId] = email;
             }
         }
 
         // Map to DTOs
-        var items = candidates.Select(candidate => new ExtractionCandidateListItemDto
-        {
-            Id = candidate.Id,
-            EmailId = candidate.EmailMessageId,
-            EmailSubject = emails.GetValueOrDefault(candidate.EmailMessageId, "Unknown"),
-            Amount = candidate.Amount?.Amount,
-            Currency = candidate.Amount?.Currency.ToString(),
-            Merchant = candidate.Merchant,
-            TransactionDate = candidate.TransactionDate,
-            SourceAccount = candidate.SourceAccount?.Value,
-            SourceBank = candidate.SourceBank?.Name,
-            Status = candidate.Status.ToString(),
-            Confidence = CalculateOverallConfidence(candidate),
-            CreatedAt = candidate.CreatedAt
-        }).ToList();
+        var items = candidates
+            .Select(candidate => new ExtractionCandidateListItemDto
+            {
+                Id = candidate.Id,
+                EmailId = candidate.EmailMessageId,
+                EmailSubject =
+                    emails.GetValueOrDefault(candidate.EmailMessageId)?.Subject ?? "Unknown",
+                EmailFrom =
+                    emails.GetValueOrDefault(candidate.EmailMessageId)?.From.Value ?? "Unknown",
+                EmailReceivedAt =
+                    emails.GetValueOrDefault(candidate.EmailMessageId)?.ReceivedAt
+                    ?? DateTime.MinValue,
+                Amount = candidate.Amount?.Amount,
+                Currency = candidate.Amount?.Currency.ToString(),
+                Merchant = candidate.Merchant,
+                TransactionDate = candidate.TransactionDate,
+                SourceAccount = candidate.SourceAccount?.Value,
+                SourceBank = candidate.SourceBank?.Name,
+                Status = candidate.Status.ToString(),
+                Confidence = CalculateOverallConfidence(candidate),
+                CreatedAt = candidate.CreatedAt,
+            })
+            .ToList();
 
-        return PaginatedResponse<ExtractionCandidateListItemDto>.Create(items, totalCount, page, pageSize);
+        return PaginatedResponse<ExtractionCandidateListItemDto>.Create(
+            items,
+            totalCount,
+            page,
+            pageSize
+        );
     }
 
     private double? CalculateOverallConfidence(Domain.Entities.ExtractionCandidate candidate)

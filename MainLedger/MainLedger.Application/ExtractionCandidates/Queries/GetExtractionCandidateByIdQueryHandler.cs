@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.ExtractionCandidates.Queries;
 
-public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtractionCandidateByIdQuery, ExtractionCandidateDto?>
+public class GetExtractionCandidateByIdQueryHandler
+    : IRequestHandler<GetExtractionCandidateByIdQuery, ExtractionCandidateDto?>
 {
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IEmailMessageRepository _emailRepository;
@@ -14,7 +15,8 @@ public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtract
     public GetExtractionCandidateByIdQueryHandler(
         IExtractionCandidateRepository candidateRepository,
         IEmailMessageRepository emailRepository,
-        ILogger<GetExtractionCandidateByIdQueryHandler> logger)
+        ILogger<GetExtractionCandidateByIdQueryHandler> logger
+    )
     {
         _candidateRepository = candidateRepository;
         _emailRepository = emailRepository;
@@ -23,13 +25,19 @@ public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtract
 
     public async Task<ExtractionCandidateDto?> Handle(
         GetExtractionCandidateByIdQuery request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Getting extraction candidate {CandidateId} for user {UserId}",
-            request.CandidateId, request.UserId);
+            request.CandidateId,
+            request.UserId
+        );
 
-        var candidate = await _candidateRepository.GetByIdAsync(request.CandidateId, cancellationToken);
+        var candidate = await _candidateRepository.GetByIdAsync(
+            request.CandidateId,
+            cancellationToken
+        );
 
         if (candidate == null)
         {
@@ -38,13 +46,18 @@ public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtract
         }
 
         // Get email to verify user ownership and get subject
-        var email = await _emailRepository.GetByIdAsync(candidate.EmailMessageId, cancellationToken);
+        var email = await _emailRepository.GetByIdAsync(
+            candidate.EmailMessageId,
+            cancellationToken
+        );
 
         if (email == null || email.UserId != request.UserId)
         {
             _logger.LogWarning(
                 "Access denied: Extraction candidate {CandidateId} does not belong to user {UserId}",
-                request.CandidateId, request.UserId);
+                request.CandidateId,
+                request.UserId
+            );
             return null;
         }
 
@@ -53,6 +66,8 @@ public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtract
             Id = candidate.Id,
             EmailId = candidate.EmailMessageId,
             EmailSubject = email.Subject,
+            EmailFrom = email.From.Value,
+            EmailReceivedAt = email.ReceivedAt,
             Amount = candidate.Amount?.Amount,
             Currency = candidate.Amount?.Currency.ToString(),
             Merchant = candidate.Merchant,
@@ -70,7 +85,7 @@ public class GetExtractionCandidateByIdQueryHandler : IRequestHandler<GetExtract
             Status = candidate.Status.ToString(),
             CreatedAt = candidate.CreatedAt,
             ConfirmedAt = candidate.ConfirmedAt,
-            RejectionReason = candidate.RejectionReason
+            RejectionReason = candidate.RejectionReason,
         };
     }
 }

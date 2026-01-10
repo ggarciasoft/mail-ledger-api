@@ -19,33 +19,47 @@ namespace MainLedger.API
             // Configure CORS
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy("AllowFrontend", policy =>
-                {
-                    policy.WithOrigins(
-                            "http://localhost:3000",  // React default
-                            "http://localhost:5173",  // Vite default
-                            "https://localhost:3000",
-                            "https://localhost:5173")
-                        .AllowAnyMethod()
-                        .AllowAnyHeader()
-                        .AllowCredentials();
-                });
+                options.AddPolicy(
+                    "AllowFrontend",
+                    policy =>
+                    {
+                        policy
+                            .WithOrigins(
+                                "http://localhost:3000", // React default
+                                "http://localhost:5173", // Vite default
+                                "https://localhost:3000",
+                                "https://localhost:5173"
+                            )
+                            .AllowAnyMethod()
+                            .AllowAnyHeader()
+                            .AllowCredentials();
+                    }
+                );
             });
 
             // Configure Data Protection for token encryption
-            builder.Services.AddDataProtection()
-                .SetApplicationName("MailLedger");
+            builder.Services.AddDataProtection().SetApplicationName("MailLedger");
+            // Configure log4net
+            var logRepository = log4net.LogManager.GetRepository(
+                System.Reflection.Assembly.GetEntryAssembly()
+            );
+            log4net.Config.XmlConfigurator.Configure(
+                logRepository,
+                new System.IO.FileInfo("log4net.config")
+            );
 
             // Configure DbContext with PostgreSQL
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
             var dataSourceBuilder = new Npgsql.NpgsqlDataSourceBuilder(connectionString);
             dataSourceBuilder.EnableDynamicJson();
             var dataSource = dataSourceBuilder.Build();
-            
+
             builder.Services.AddDbContext<MailLedgerDbContext>(options =>
                 options.UseNpgsql(
                     dataSource,
-                    npgsqlOptions => npgsqlOptions.MigrationsAssembly("MainLedger.Infrastructure")));
+                    npgsqlOptions => npgsqlOptions.MigrationsAssembly("MainLedger.Infrastructure")
+                )
+            );
 
             // Register repositories
             builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -54,11 +68,20 @@ namespace MainLedger.API
             builder.Services.AddScoped<IRuleRepository, RuleRepository>();
             builder.Services.AddScoped<IFinancialRecordRepository, FinancialRecordRepository>();
             builder.Services.AddScoped<IExtractionVersionRepository, ExtractionVersionRepository>();
-            builder.Services.AddScoped<IExtractionCandidateRepository, ExtractionCandidateRepository>();
+            builder.Services.AddScoped<
+                IExtractionCandidateRepository,
+                ExtractionCandidateRepository
+            >();
             builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
             builder.Services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
-            builder.Services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
-            builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+            builder.Services.AddScoped<
+                IEmailVerificationTokenRepository,
+                EmailVerificationTokenRepository
+            >();
+            builder.Services.AddScoped<
+                IPasswordResetTokenRepository,
+                PasswordResetTokenRepository
+            >();
             builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
@@ -66,69 +89,106 @@ namespace MainLedger.API
             builder.Services.AddHttpContextAccessor();
 
             // Register security services
-            builder.Services.AddSingleton<MainLedger.Application.Common.Interfaces.ITokenEncryptionService, 
-                MainLedger.Infrastructure.Security.TokenEncryptionService>();
-            
+            builder.Services.AddSingleton<
+                MainLedger.Application.Common.Interfaces.ITokenEncryptionService,
+                MainLedger.Infrastructure.Security.TokenEncryptionService
+            >();
+
             // Register authentication services
-            builder.Services.AddSingleton<MainLedger.Domain.Services.IPasswordHasher,
-                MainLedger.Infrastructure.Security.PasswordHasher>();
-            
-            builder.Services.AddSingleton<MainLedger.Domain.Services.ITokenGenerator,
-                MainLedger.Infrastructure.Security.TokenGenerator>();
-            
-            builder.Services.AddScoped<MainLedger.Application.Authentication.Services.IJwtTokenService,
-                MainLedger.Infrastructure.Security.JwtTokenService>();
-            
-            builder.Services.AddScoped<MainLedger.Application.Authentication.Services.ICurrentUserService,
-                MainLedger.Infrastructure.Security.CurrentUserService>();
+            builder.Services.AddSingleton<
+                MainLedger.Domain.Services.IPasswordHasher,
+                MainLedger.Infrastructure.Security.PasswordHasher
+            >();
+
+            builder.Services.AddSingleton<
+                MainLedger.Domain.Services.ITokenGenerator,
+                MainLedger.Infrastructure.Security.TokenGenerator
+            >();
+
+            builder.Services.AddScoped<
+                MainLedger.Application.Authentication.Services.IJwtTokenService,
+                MainLedger.Infrastructure.Security.JwtTokenService
+            >();
+
+            builder.Services.AddScoped<
+                MainLedger.Application.Authentication.Services.ICurrentUserService,
+                MainLedger.Infrastructure.Security.CurrentUserService
+            >();
 
             // Register Rules Engine
-            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IRulesEngine,
-                MainLedger.Application.Services.RulesEngine>();
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IRulesEngine,
+                MainLedger.Application.Services.RulesEngine
+            >();
 
             // Register Classification Service
             builder.Services.Configure<MainLedger.Domain.Settings.OpenAISettings>(
-                builder.Configuration.GetSection(MainLedger.Domain.Settings.OpenAISettings.SectionName));
-            
-            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IClassificationService,
-                MainLedger.Integrations.Services.OpenAIClassificationService>();
+                builder.Configuration.GetSection(
+                    MainLedger.Domain.Settings.OpenAISettings.SectionName
+                )
+            );
+
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IClassificationService,
+                MainLedger.Integrations.Services.OpenAIClassificationService
+            >();
 
             // Register Extraction Service
-            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IExtractionService,
-                MainLedger.Integrations.Services.OpenAIExtractionService>();
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IExtractionService,
+                MainLedger.Integrations.Services.OpenAIExtractionService
+            >();
 
             // Register Normalization Service
-            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.INormalizationService,
-                MainLedger.Application.Services.NormalizationService>();
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.INormalizationService,
+                MainLedger.Application.Services.NormalizationService
+            >();
 
             // Register Gmail Integration
             builder.Services.Configure<MainLedger.Domain.Settings.GmailSettings>(
-                builder.Configuration.GetSection(MainLedger.Domain.Settings.GmailSettings.SectionName));
-            
-            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IGmailService, MainLedger.Integrations.Services.GmailService>();
+                builder.Configuration.GetSection(
+                    MainLedger.Domain.Settings.GmailSettings.SectionName
+                )
+            );
+
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IGmailService,
+                MainLedger.Integrations.Services.GmailService
+            >();
 
             // Register MediatR
-            builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(MainLedger.Application.Emails.Commands.SyncGmailEmailsCommand).Assembly));
+            builder.Services.AddMediatR(cfg =>
+                cfg.RegisterServicesFromAssembly(
+                    typeof(MainLedger.Application.Emails.Commands.SyncGmailEmailsCommand).Assembly
+                )
+            );
 
             // Configure JWT Authentication
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            builder
+                .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
                     var jwtSettings = builder.Configuration.GetSection("Jwt");
-                    var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-                    
-                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = jwtSettings["Issuer"],
-                        ValidAudience = jwtSettings["Audience"],
-                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                            System.Text.Encoding.UTF8.GetBytes(secretKey)),
-                        ClockSkew = TimeSpan.Zero
-                    };
+                    var secretKey =
+                        jwtSettings["SecretKey"]
+                        ?? throw new InvalidOperationException("JWT SecretKey not configured");
+
+                    options.TokenValidationParameters =
+                        new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                        {
+                            ValidateIssuer = true,
+                            ValidateAudience = true,
+                            ValidateLifetime = true,
+                            ValidateIssuerSigningKey = true,
+                            ValidIssuer = jwtSettings["Issuer"],
+                            ValidAudience = jwtSettings["Audience"],
+                            IssuerSigningKey =
+                                new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+                                    System.Text.Encoding.UTF8.GetBytes(secretKey)
+                                ),
+                            ClockSkew = TimeSpan.Zero,
+                        };
                 });
 
             builder.Services.AddAuthorization();
@@ -136,6 +196,10 @@ namespace MainLedger.API
             // Add Swagger/OpenAPI
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            // Add log4net logging
+            builder.Logging.ClearProviders();
+            builder.Logging.AddLog4Net("log4net.config");
 
             var app = builder.Build();
 
@@ -145,16 +209,14 @@ namespace MainLedger.API
                 using var scope = app.Services.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<MailLedgerDbContext>();
                 Infrastructure.Persistence.Seed.DatabaseSeeder.SeedAsync(context).Wait();
-            }
-
-            // Configure the HTTP request pipeline
-            if (app.Environment.IsDevelopment())
-            {
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
 
             app.UseHttpsRedirection();
+
+            // HTTP Request/Response Logging (configurable via appsettings.json)
+            app.UseMiddleware<MainLedger.API.Middleware.HttpLoggingMiddleware>();
 
             // Enable CORS
             app.UseCors("AllowFrontend");

@@ -58,9 +58,17 @@ public class FinancialRecordsController : ControllerBase
 
         try
         {
-            var query = new GetFinancialRecordsQuery(
-                userId.Value, startDate, endDate, minAmount, maxAmount,
-                merchant, currency, sourceBank, page, pageSize, sortBy, sortOrder);
+// Convert dates to UTC for PostgreSQL compatibility
+var startDateUtc = startDate.HasValue 
+    ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc) 
+    : (DateTime?)null;
+var endDateUtc = endDate.HasValue 
+    ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc) 
+    : (DateTime?)null;
+
+var query = new GetFinancialRecordsQuery(
+    userId.Value, startDateUtc, endDateUtc, minAmount, maxAmount,
+    merchant, currency, sourceBank, page, pageSize, sortBy, sortOrder);
             
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);

@@ -11,12 +11,17 @@ public enum Currency
     USD,
 
     /// <summary>
+    /// Euro
+    /// </summary>
+    EUR,
+
+    /// <summary>
+    /// British Pound
+    /// </summary>
+    GBP,
+
+    /// <summary>
     /// Dominican Peso
     /// </summary>
     DOP,
-
-    /// <summary>
-    /// Euro
-    /// </summary>
-    EUR
 }

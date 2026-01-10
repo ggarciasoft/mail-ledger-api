@@ -11,6 +11,8 @@ public class DashboardOverviewDto
     public int PendingConfirmation { get; init; }
     public int ConfirmedRecords { get; init; }
     public int FailedProcessing { get; init; }
+    public decimal TotalSpending { get; init; }
+    public decimal AvgTransaction { get; init; }
     public DateTime? LastSyncAt { get; init; }
     public List<RecentActivityDto> RecentActivity { get; init; } = new();
 }

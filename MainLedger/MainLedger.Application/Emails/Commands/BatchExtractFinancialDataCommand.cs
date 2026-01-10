@@ -13,7 +13,8 @@ namespace MainLedger.Application.Emails.Commands;
 /// Command to batch extract financial data from classified emails.
 /// Processes up to a specified number of financial emails in parallel.
 /// </summary>
-public record BatchExtractFinancialDataCommand(Guid UserId, int BatchSize = 20) : IRequest<BatchExtractionResult>;
+public record BatchExtractFinancialDataCommand(Guid UserId, int BatchSize = 20)
+    : IRequest<BatchExtractionResult>;
 
 public record BatchExtractionResult
 {
@@ -23,12 +24,14 @@ public record BatchExtractionResult
     public string Status { get; init; } = string.Empty;
 }
 
-public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtractFinancialDataCommand, BatchExtractionResult>
+public class BatchExtractFinancialDataCommandHandler
+    : IRequestHandler<BatchExtractFinancialDataCommand, BatchExtractionResult>
 {
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IExtractionService _extractionService;
     private readonly INormalizationService _normalizationService;
     private readonly IExtractionVersionRepository _versionRepository;
+    private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<BatchExtractFinancialDataCommandHandler> _logger;
 
@@ -37,22 +40,30 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
         IExtractionService extractionService,
         INormalizationService normalizationService,
         IExtractionVersionRepository versionRepository,
+        IExtractionCandidateRepository candidateRepository,
         IUnitOfWork unitOfWork,
-        ILogger<BatchExtractFinancialDataCommandHandler> logger)
+        ILogger<BatchExtractFinancialDataCommandHandler> logger
+    )
     {
         _emailRepository = emailRepository;
         _extractionService = extractionService;
         _normalizationService = normalizationService;
         _versionRepository = versionRepository;
+        _candidateRepository = candidateRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
-    public async Task<BatchExtractionResult> Handle(BatchExtractFinancialDataCommand request, CancellationToken cancellationToken)
+    public async Task<BatchExtractionResult> Handle(
+        BatchExtractFinancialDataCommand request,
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Starting batch extraction for user {UserId} with batch size {BatchSize}",
-            request.UserId, request.BatchSize);
+            request.UserId,
+            request.BatchSize
+        );
 
         // Get active extraction version
         var version = await _versionRepository.GetActiveAsync(cancellationToken);
@@ -65,17 +76,21 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
         var classifiedEmails = await _emailRepository.GetClassifiedFinancialEmailsAsync(
             request.UserId,
             request.BatchSize,
-            cancellationToken);
+            cancellationToken
+        );
 
         if (!classifiedEmails.Any())
         {
-            _logger.LogInformation("No classified financial emails found for user {UserId}", request.UserId);
+            _logger.LogInformation(
+                "No classified financial emails found for user {UserId}",
+                request.UserId
+            );
             return new BatchExtractionResult
             {
                 EmailsProcessed = 0,
                 EmailsExtracted = 0,
                 EmailsFailed = 0,
-                Status = "No classified financial emails"
+                Status = "No classified financial emails",
             };
         }
 
@@ -88,33 +103,52 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
         {
             try
             {
-                _logger.LogDebug("Extracting financial data from email {MessageId}", email.MessageId);
+                _logger.LogDebug(
+                    "Extracting financial data from email {MessageId}",
+                    email.MessageId
+                );
 
                 // Extract data
-                var extractionResult = await _extractionService.ExtractFinancialDataAsync(email, cancellationToken);
+                var extractionResult = await _extractionService.ExtractFinancialDataAsync(
+                    email,
+                    cancellationToken
+                );
 
                 // Normalize data
                 var normalizationResult = await _normalizationService.NormalizeExtractionAsync(
                     extractionResult,
                     email,
-                    cancellationToken);
+                    cancellationToken
+                );
 
                 // Check for validation errors
                 if (!normalizationResult.IsValid)
                 {
-                    var errorMessages = string.Join(", ", normalizationResult.Errors.Select(e => $"{e.Field}: {e.Message}"));
+                    var errorMessages = string.Join(
+                        ", ",
+                        normalizationResult.Errors.Select(e => $"{e.Field}: {e.Message}")
+                    );
                     _logger.LogWarning(
                         "Normalization failed for email {MessageId}: {Errors}",
-                        email.MessageId, errorMessages);
-                    
-                    email.SetProcessingStatus(EmailProcessingStatus.Failed, $"Normalization failed: {errorMessages}");
+                        email.MessageId,
+                        errorMessages
+                    );
+
+                    email.SetProcessingStatus(
+                        EmailProcessingStatus.Failed,
+                        $"Normalization failed: {errorMessages}"
+                    );
                     Interlocked.Increment(ref failedCount);
                     return;
                 }
 
                 // Create extraction candidate with normalized data
-                var candidate = CreateExtractionCandidate(email.Id, version.Id, normalizationResult);
-                
+                var candidate = CreateExtractionCandidate(
+                    email.Id,
+                    version.Id,
+                    normalizationResult
+                );
+
                 lock (candidates)
                 {
                     candidates.Add(candidate);
@@ -124,7 +158,10 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
 
                 _logger.LogInformation(
                     "Email {MessageId} extracted: Amount={Amount}, Merchant={Merchant}",
-                    email.MessageId, normalizationResult.NormalizedAmount, normalizationResult.NormalizedMerchant);
+                    email.MessageId,
+                    normalizationResult.NormalizedAmount,
+                    normalizationResult.NormalizedMerchant
+                );
 
                 Interlocked.Increment(ref extractedCount);
             }
@@ -139,30 +176,45 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
         // Wait for all extractions to complete
         await Task.WhenAll(extractionTasks);
 
-        // Save all changes (candidates will be saved via repository later)
-        // For now, we just update email statuses
+        // Save extraction candidates to database
+        foreach (var candidate in candidates)
+        {
+            await _candidateRepository.AddAsync(candidate, cancellationToken);
+        }
+
+        // Save all changes (candidates and email statuses)
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
             "Batch extraction completed: {Processed} processed, {Extracted} extracted, {Failed} failed",
-            classifiedEmails.Count, extractedCount, failedCount);
+            classifiedEmails.Count,
+            extractedCount,
+            failedCount
+        );
 
         return new BatchExtractionResult
         {
             EmailsProcessed = classifiedEmails.Count,
             EmailsExtracted = extractedCount,
             EmailsFailed = failedCount,
-            Status = "Success"
+            Status = "Success",
         };
     }
 
-    private ExtractionCandidate CreateExtractionCandidate(Guid emailId, Guid versionId, NormalizationResult result)
+    private ExtractionCandidate CreateExtractionCandidate(
+        Guid emailId,
+        Guid versionId,
+        NormalizationResult result
+    )
     {
         var candidate = ExtractionCandidate.Create(emailId, versionId);
 
         // Set transaction data
         Money? amount = null;
-        if (result.NormalizedAmount.HasValue && !string.IsNullOrWhiteSpace(result.NormalizedCurrency))
+        if (
+            result.NormalizedAmount.HasValue
+            && !string.IsNullOrWhiteSpace(result.NormalizedCurrency)
+        )
         {
             if (Enum.TryParse<Currency>(result.NormalizedCurrency, true, out var currency))
             {
@@ -176,7 +228,8 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
             result.NormalizedMerchant,
             result.AmountConfidence > 0 ? Confidence.Create(result.AmountConfidence) : null,
             result.DateConfidence > 0 ? Confidence.Create(result.DateConfidence) : null,
-            result.MerchantConfidence > 0 ? Confidence.Create(result.MerchantConfidence) : null);
+            result.MerchantConfidence > 0 ? Confidence.Create(result.MerchantConfidence) : null
+        );
 
         // Set account info
         AccountNumber? sourceAccount = null;
@@ -197,12 +250,18 @@ public class BatchExtractFinancialDataCommandHandler : IRequestHandler<BatchExtr
 
         if (!string.IsNullOrWhiteSpace(result.NormalizedSourceBank))
         {
-            sourceBank = BankProvider.Create(result.NormalizedSourceBank, result.NormalizedSourceBank);
+            sourceBank = BankProvider.Create(
+                result.NormalizedSourceBank,
+                result.NormalizedSourceBank
+            );
         }
 
         if (!string.IsNullOrWhiteSpace(result.NormalizedTargetBank))
         {
-            targetBank = BankProvider.Create(result.NormalizedTargetBank, result.NormalizedTargetBank);
+            targetBank = BankProvider.Create(
+                result.NormalizedTargetBank,
+                result.NormalizedTargetBank
+            );
         }
 
         candidate.SetAccountInfo(sourceAccount, targetAccount, sourceBank, targetBank);

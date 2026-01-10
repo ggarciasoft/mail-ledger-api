@@ -21,7 +21,8 @@ public class OpenAIExtractionService : IExtractionService
 
     public OpenAIExtractionService(
         IOptions<OpenAISettings> settings,
-        ILogger<OpenAIExtractionService> logger)
+        ILogger<OpenAIExtractionService> logger
+    )
     {
         _settings = settings.Value;
         _logger = logger;
@@ -30,15 +31,22 @@ public class OpenAIExtractionService : IExtractionService
 
     public async Task<ExtractionResult> ExtractFinancialDataAsync(
         EmailMessage email,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
             // Truncate body for cost control
-            var body = TruncateBody(email.BodyText, _settings.MaxBodyLength);
+            var cleanedBody = CleanHtml(email.BodyText);
+            var body = TruncateBody(cleanedBody, _settings.MaxBodyLength);
 
             // Build extraction prompt
-            var prompt = BuildExtractionPrompt(email.Subject, email.From.Value, body, email.Category?.ToString());
+            var prompt = BuildExtractionPrompt(
+                email.Subject,
+                email.From.Value,
+                body,
+                email.Category?.ToString()
+            );
 
             _logger.LogDebug("Extracting financial data from email {MessageId}", email.MessageId);
 
@@ -46,39 +54,104 @@ public class OpenAIExtractionService : IExtractionService
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage(GetSystemPrompt()),
-                new UserChatMessage(prompt)
+                new UserChatMessage(prompt),
             };
 
             var options = new ChatCompletionOptions
             {
                 MaxOutputTokenCount = _settings.MaxTokens,
                 Temperature = (float)_settings.Temperature,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
             };
 
-            var response = await _chatClient.CompleteChatAsync(messages, options, cancellationToken);
+            var response = await _chatClient.CompleteChatAsync(
+                messages,
+                options,
+                cancellationToken
+            );
 
             // Parse response
             var result = ParseExtractionResponse(response.Value.Content[0].Text);
 
             _logger.LogInformation(
                 "Email {MessageId} extraction complete: Amount={Amount} {Currency}, Merchant={Merchant}",
-                email.MessageId, result.Amount, result.Currency, result.Merchant);
+                email.MessageId,
+                result.Amount,
+                result.Currency,
+                result.Merchant
+            );
 
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to extract financial data from email {MessageId}", email.MessageId);
-            
+            _logger.LogError(
+                ex,
+                "Failed to extract financial data from email {MessageId}",
+                email.MessageId
+            );
+
             // Return empty result on error
             return new ExtractionResult
             {
                 Reasoning = $"Extraction failed: {ex.Message}",
-                HasAmbiguities = true
+                HasAmbiguities = true,
             };
         }
     }
+
+
+    private string CleanHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        var cleaned = html;
+
+        // Remove style tags and their content (case-insensitive, multiline)
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"<style[^>]*>.*?</style>",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // Remove script tags and their content
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"<script[^>]*>.*?</script>",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // Remove style attributes with double quotes
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+style\s*=\s*""[^""]*""",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Remove style attributes with single quotes
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+style\s*=\s*'[^']*'",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Remove class attributes (optional - reduces noise)
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+class\s*=\s*""[^""]*""",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+class\s*=\s*'[^']*'",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return cleaned;
+    }
+
 
     private string GetSystemPrompt()
     {
@@ -127,7 +200,9 @@ IMPORTANT:
 - Be conservative with confidence scores
 - Set hasAmbiguities to true if any important field is missing or unclear
 - Extract amounts as numbers without currency symbols
-- Use ISO date format (YYYY-MM-DD)";
+- Use ISO date format (YYYY-MM-DD) in the response
+- When parsing dates from the email, assume dd/MM/yyyy format (day/month/year) unless clearly specified otherwise
+- For example: '7/1/2026' should be interpreted as January 7th, 2026 (2026-01-07), NOT July 1st";
     }
 
     private string BuildExtractionPrompt(string subject, string from, string body, string? category)
@@ -137,16 +212,16 @@ IMPORTANT:
         sb.AppendLine();
         sb.AppendLine($"From: {from}");
         sb.AppendLine($"Subject: {subject}");
-        
+
         if (!string.IsNullOrWhiteSpace(category))
         {
             sb.AppendLine($"Category: {category}");
         }
-        
+
         sb.AppendLine();
         sb.AppendLine("Body:");
         sb.AppendLine(body);
-        
+
         return sb.ToString();
     }
 
@@ -154,10 +229,7 @@ IMPORTANT:
     {
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
             var response = JsonSerializer.Deserialize<ExtractionResponse>(jsonResponse, options);
 
@@ -165,6 +237,14 @@ IMPORTANT:
             {
                 throw new InvalidOperationException("Failed to deserialize extraction response");
             }
+
+            // Log the raw JSON and parsed amount for debugging
+            _logger.LogDebug("Raw extraction JSON: {Json}", jsonResponse);
+            _logger.LogDebug(
+                "Parsed amount: {Amount}, Currency: {Currency}",
+                response.Amount,
+                response.Currency
+            );
 
             return new ExtractionResult
             {
@@ -183,17 +263,17 @@ IMPORTANT:
                 DateConfidence = Math.Clamp(response.DateConfidence, 0.0, 1.0),
                 MerchantConfidence = Math.Clamp(response.MerchantConfidence, 0.0, 1.0),
                 Reasoning = response.Reasoning ?? string.Empty,
-                HasAmbiguities = response.HasAmbiguities
+                HasAmbiguities = response.HasAmbiguities,
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to parse extraction response: {Response}", jsonResponse);
-            
+
             return new ExtractionResult
             {
                 Reasoning = $"Parse error: {ex.Message}",
-                HasAmbiguities = true
+                HasAmbiguities = true,
             };
         }
     }

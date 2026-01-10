@@ -23,7 +23,8 @@ public class OpenAIClassificationService : IClassificationService
 
     public OpenAIClassificationService(
         IOptions<OpenAISettings> settings,
-        ILogger<OpenAIClassificationService> logger)
+        ILogger<OpenAIClassificationService> logger
+    )
     {
         _settings = settings.Value;
         _logger = logger;
@@ -32,56 +33,121 @@ public class OpenAIClassificationService : IClassificationService
 
     public async Task<ClassificationResult> ClassifyEmailAsync(
         EmailMessage email,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
-            // Truncate body for cost control
-            var body = TruncateBody(email.BodyText, _settings.MaxBodyLength);
+            // Clean and truncate body for cost control
+            var cleanedBody = CleanHtml(email.BodyText);
+            var body = TruncateBody(cleanedBody, _settings.MaxBodyLength);
 
             // Build prompt
             var prompt = BuildClassificationPrompt(email.Subject, email.From.Value, body);
 
-            _logger.LogDebug("Classifying email {MessageId} from {Sender}", email.MessageId, email.From.Value);
+            _logger.LogDebug(
+                "Classifying email {MessageId} from {Sender}",
+                email.MessageId,
+                email.From.Value
+            );
 
             // Call OpenAI API
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage(GetSystemPrompt()),
-                new UserChatMessage(prompt)
+                new UserChatMessage(prompt),
             };
 
             var options = new ChatCompletionOptions
             {
                 MaxOutputTokenCount = _settings.MaxTokens,
                 Temperature = (float)_settings.Temperature,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
             };
 
-            var response = await _chatClient.CompleteChatAsync(messages, options, cancellationToken);
+            var response = await _chatClient.CompleteChatAsync(
+                messages,
+                options,
+                cancellationToken
+            );
 
             // Parse response
             var result = ParseClassificationResponse(response.Value.Content[0].Text);
 
             _logger.LogInformation(
                 "Email {MessageId} classified: IsFinancial={IsFinancial}, Category={Category}, Confidence={Confidence}",
-                email.MessageId, result.IsFinancial, result.Category, result.Confidence.Value);
+                email.MessageId,
+                result.IsFinancial,
+                result.Category,
+                result.Confidence.Value
+            );
 
             return result;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to classify email {MessageId}", email.MessageId);
-            
+
             // Return safe default on error
             return new ClassificationResult
             {
                 IsFinancial = false,
                 Category = null,
                 Confidence = Confidence.Create(0.0),
-                Reasoning = $"Classification failed: {ex.Message}"
+                Reasoning = $"Classification failed: {ex.Message}",
             };
         }
+    }
+
+    private string CleanHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        var cleaned = html;
+
+        // Remove style tags and their content (case-insensitive, multiline)
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"<style[^>]*>.*?</style>",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // Remove script tags and their content
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"<script[^>]*>.*?</script>",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // Remove style attributes with double quotes
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+style\s*=\s*""[^""]*""",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Remove style attributes with single quotes
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+style\s*=\s*'[^']*'",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Remove class attributes (optional - reduces noise)
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+class\s*=\s*""[^""]*""",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"\s+class\s*=\s*'[^']*'",
+            "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return cleaned;
     }
 
     private string GetSystemPrompt()
@@ -122,7 +188,7 @@ If not financial, set category to null.";
         sb.AppendLine();
         sb.AppendLine("Body:");
         sb.AppendLine(body);
-        
+
         return sb.ToString();
     }
 
@@ -130,16 +196,18 @@ If not financial, set category to null.";
     {
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-            var response = JsonSerializer.Deserialize<ClassificationResponse>(jsonResponse, options);
+            var response = JsonSerializer.Deserialize<ClassificationResponse>(
+                jsonResponse,
+                options
+            );
 
             if (response == null)
             {
-                throw new InvalidOperationException("Failed to deserialize classification response");
+                throw new InvalidOperationException(
+                    "Failed to deserialize classification response"
+                );
             }
 
             EmailCategory? category = null;
@@ -156,20 +224,24 @@ If not financial, set category to null.";
                 IsFinancial = response.IsFinancial,
                 Category = category,
                 Confidence = Confidence.Create(Math.Clamp(response.Confidence, 0.0, 1.0)),
-                Reasoning = response.Reasoning ?? string.Empty
+                Reasoning = response.Reasoning ?? string.Empty,
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to parse classification response: {Response}", jsonResponse);
-            
+            _logger.LogError(
+                ex,
+                "Failed to parse classification response: {Response}",
+                jsonResponse
+            );
+
             // Return low-confidence non-financial result
             return new ClassificationResult
             {
                 IsFinancial = false,
                 Category = null,
                 Confidence = Confidence.Create(0.0),
-                Reasoning = $"Parse error: {ex.Message}"
+                Reasoning = $"Parse error: {ex.Message}",
             };
         }
     }

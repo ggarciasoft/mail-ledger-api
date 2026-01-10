@@ -16,37 +16,75 @@ public class NormalizationService : INormalizationService
 {
     private static readonly HashSet<string> ValidCurrencies = new()
     {
-        "USD", "EUR", "GBP", "DOP", "CAD", "AUD", "JPY", "CHF", "CNY", "INR", "MXN", "BRL"
+        "USD",
+        "EUR",
+        "GBP",
+        "DOP",
+        "CAD",
+        "AUD",
+        "JPY",
+        "CHF",
+        "CNY",
+        "INR",
+        "MXN",
+        "BRL",
     };
 
     private static readonly string[] MerchantSuffixes = new[]
     {
-        "LLC", "INC", "CORP", "LTD", "CO", "CORPORATION", "INCORPORATED", "LIMITED", "COMPANY"
+        "LLC",
+        "INC",
+        "CORP",
+        "LTD",
+        "CO",
+        "CORPORATION",
+        "INCORPORATED",
+        "LIMITED",
+        "COMPANY",
     };
 
     public async Task<NormalizationResult> NormalizeExtractionAsync(
         ExtractionResult extraction,
         EmailMessage email,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var errors = new List<NormalizationError>();
         var warnings = new List<NormalizationWarning>();
 
         // Normalize currency
-        var normalizedCurrency = NormalizeCurrency(extraction.Currency, extraction.Amount, errors, warnings);
+        var normalizedCurrency = NormalizeCurrency(
+            extraction.Currency,
+            extraction.Amount,
+            errors,
+            warnings
+        );
 
         // Normalize amount
         var normalizedAmount = NormalizeAmount(extraction.Amount, errors);
 
         // Normalize date
-        var normalizedDate = NormalizeDate(extraction.TransactionDate, email.ReceivedAt, errors, warnings);
+        var normalizedDate = NormalizeDate(
+            extraction.TransactionDate,
+            email.ReceivedAt,
+            errors,
+            warnings
+        );
 
         // Normalize merchant
         var normalizedMerchant = NormalizeMerchant(extraction.Merchant, warnings);
 
         // Normalize account numbers
-        var normalizedSourceAccount = NormalizeAccountNumber(extraction.SourceAccount, "SourceAccount", warnings);
-        var normalizedTargetAccount = NormalizeAccountNumber(extraction.TargetAccount, "TargetAccount", warnings);
+        var normalizedSourceAccount = NormalizeAccountNumber(
+            extraction.SourceAccount,
+            "SourceAccount",
+            warnings
+        );
+        var normalizedTargetAccount = NormalizeAccountNumber(
+            extraction.TargetAccount,
+            "TargetAccount",
+            warnings
+        );
 
         // Normalize bank names
         var normalizedSourceBank = NormalizeBankName(extraction.SourceBank);
@@ -60,28 +98,31 @@ public class NormalizationService : INormalizationService
         var deduplicationHash = GenerateDeduplicationHash(
             email.ContentHash,
             normalizedAmount,
-            normalizedDate);
+            normalizedDate
+        );
 
-        return await Task.FromResult(new NormalizationResult
-        {
-            NormalizedAmount = normalizedAmount,
-            NormalizedCurrency = normalizedCurrency,
-            NormalizedDate = normalizedDate,
-            NormalizedMerchant = normalizedMerchant,
-            NormalizedSourceAccount = normalizedSourceAccount,
-            NormalizedTargetAccount = normalizedTargetAccount,
-            NormalizedSourceBank = normalizedSourceBank,
-            NormalizedTargetBank = normalizedTargetBank,
-            NormalizedFees = normalizedFees,
-            NormalizedTax = normalizedTax,
-            ReferenceId = extraction.ReferenceId,
-            DeduplicationHash = deduplicationHash,
-            Errors = errors,
-            Warnings = warnings,
-            AmountConfidence = extraction.AmountConfidence,
-            DateConfidence = extraction.DateConfidence,
-            MerchantConfidence = extraction.MerchantConfidence
-        });
+        return await Task.FromResult(
+            new NormalizationResult
+            {
+                NormalizedAmount = normalizedAmount,
+                NormalizedCurrency = normalizedCurrency,
+                NormalizedDate = normalizedDate,
+                NormalizedMerchant = normalizedMerchant,
+                NormalizedSourceAccount = normalizedSourceAccount,
+                NormalizedTargetAccount = normalizedTargetAccount,
+                NormalizedSourceBank = normalizedSourceBank,
+                NormalizedTargetBank = normalizedTargetBank,
+                NormalizedFees = normalizedFees,
+                NormalizedTax = normalizedTax,
+                ReferenceId = extraction.ReferenceId,
+                DeduplicationHash = deduplicationHash,
+                Errors = errors,
+                Warnings = warnings,
+                AmountConfidence = extraction.AmountConfidence,
+                DateConfidence = extraction.DateConfidence,
+                MerchantConfidence = extraction.MerchantConfidence,
+            }
+        );
     }
 
     /// <summary>
@@ -91,18 +132,22 @@ public class NormalizationService : INormalizationService
         string? currency,
         decimal? amount,
         List<NormalizationError> errors,
-        List<NormalizationWarning> warnings)
+        List<NormalizationWarning> warnings
+    )
     {
         if (string.IsNullOrWhiteSpace(currency))
         {
             // Default to USD if amount is present
             if (amount.HasValue)
             {
-                warnings.Add(new NormalizationWarning(
-                    "Currency",
-                    "Currency missing, defaulting to USD",
-                    null,
-                    "USD"));
+                warnings.Add(
+                    new NormalizationWarning(
+                        "Currency",
+                        "Currency missing, defaulting to USD",
+                        null,
+                        "USD"
+                    )
+                );
                 return "USD";
             }
             return null;
@@ -112,11 +157,14 @@ public class NormalizationService : INormalizationService
 
         if (!ValidCurrencies.Contains(normalized))
         {
-            warnings.Add(new NormalizationWarning(
-                "Currency",
-                $"Unknown currency code: {normalized}. Please verify.",
-                currency,
-                normalized));
+            warnings.Add(
+                new NormalizationWarning(
+                    "Currency",
+                    $"Unknown currency code: {normalized}. Please verify.",
+                    currency,
+                    normalized
+                )
+            );
         }
 
         return normalized;
@@ -128,9 +176,10 @@ public class NormalizationService : INormalizationService
     private decimal? NormalizeAmount(
         decimal? amount,
         List<NormalizationError> errors,
-        bool isOptional = false)
+        bool isOptional = false
+    )
     {
-        if (!amount.HasValue)
+        if (amount.GetValueOrDefault() == 0)
         {
             if (!isOptional)
             {
@@ -139,23 +188,32 @@ public class NormalizationService : INormalizationService
             return null;
         }
 
+        // Log the actual amount value for debugging
+        Console.WriteLine($"[DEBUG] Normalizing amount: {amount.Value} (IsOptional: {isOptional})");
+
         // Validate positive
         if (amount.Value <= 0)
         {
-            errors.Add(new NormalizationError(
-                "Amount",
-                "Amount must be positive",
-                amount.Value.ToString(CultureInfo.InvariantCulture)));
+            errors.Add(
+                new NormalizationError(
+                    "Amount",
+                    $"Amount must be positive (received: {amount.Value})",
+                    amount.Value.ToString(CultureInfo.InvariantCulture)
+                )
+            );
             return null;
         }
 
         // Validate reasonable (< $1,000,000)
         if (amount.Value > 1_000_000)
         {
-            errors.Add(new NormalizationError(
-                "Amount",
-                "Amount exceeds reasonable limit ($1,000,000)",
-                amount.Value.ToString(CultureInfo.InvariantCulture)));
+            errors.Add(
+                new NormalizationError(
+                    "Amount",
+                    "Amount exceeds reasonable limit ($1,000,000)",
+                    amount.Value.ToString(CultureInfo.InvariantCulture)
+                )
+            );
             return null;
         }
 
@@ -170,16 +228,20 @@ public class NormalizationService : INormalizationService
         DateTime? transactionDate,
         DateTime emailReceivedAt,
         List<NormalizationError> errors,
-        List<NormalizationWarning> warnings)
+        List<NormalizationWarning> warnings
+    )
     {
         if (!transactionDate.HasValue)
         {
             // Default to email received date
-            warnings.Add(new NormalizationWarning(
-                "TransactionDate",
-                "Transaction date missing, using email received date",
-                null,
-                emailReceivedAt.ToString("yyyy-MM-dd")));
+            warnings.Add(
+                new NormalizationWarning(
+                    "TransactionDate",
+                    "Transaction date missing, using email received date",
+                    null,
+                    emailReceivedAt.ToString("yyyy-MM-dd")
+                )
+            );
             return emailReceivedAt.ToUniversalTime();
         }
 
@@ -189,10 +251,13 @@ public class NormalizationService : INormalizationService
         var futureLimit = DateTime.UtcNow.AddHours(24);
         if (normalized > futureLimit)
         {
-            errors.Add(new NormalizationError(
-                "TransactionDate",
-                "Transaction date cannot be in the future",
-                transactionDate.Value.ToString("yyyy-MM-dd")));
+            errors.Add(
+                new NormalizationError(
+                    "TransactionDate",
+                    "Transaction date cannot be in the future",
+                    transactionDate.Value.ToString("yyyy-MM-dd")
+                )
+            );
             return null;
         }
 
@@ -200,11 +265,14 @@ public class NormalizationService : INormalizationService
         var oldLimit = DateTime.UtcNow.AddYears(-10);
         if (normalized < oldLimit)
         {
-            warnings.Add(new NormalizationWarning(
-                "TransactionDate",
-                "Transaction date is more than 10 years old. Please verify.",
-                transactionDate.Value.ToString("yyyy-MM-dd"),
-                normalized.ToString("yyyy-MM-dd")));
+            warnings.Add(
+                new NormalizationWarning(
+                    "TransactionDate",
+                    "Transaction date is more than 10 years old. Please verify.",
+                    transactionDate.Value.ToString("yyyy-MM-dd"),
+                    normalized.ToString("yyyy-MM-dd")
+                )
+            );
         }
 
         return normalized;
@@ -213,9 +281,7 @@ public class NormalizationService : INormalizationService
     /// <summary>
     /// Normalizes merchant name.
     /// </summary>
-    private string? NormalizeMerchant(
-        string? merchant,
-        List<NormalizationWarning> warnings)
+    private string? NormalizeMerchant(string? merchant, List<NormalizationWarning> warnings)
     {
         if (string.IsNullOrWhiteSpace(merchant))
         {
@@ -248,11 +314,14 @@ public class NormalizationService : INormalizationService
         // Max length 200 characters
         if (normalized.Length > 200)
         {
-            warnings.Add(new NormalizationWarning(
-                "Merchant",
-                "Merchant name truncated to 200 characters",
-                merchant,
-                normalized.Substring(0, 200)));
+            warnings.Add(
+                new NormalizationWarning(
+                    "Merchant",
+                    "Merchant name truncated to 200 characters",
+                    merchant,
+                    normalized.Substring(0, 200)
+                )
+            );
             normalized = normalized.Substring(0, 200);
         }
 
@@ -265,7 +334,8 @@ public class NormalizationService : INormalizationService
     private string? NormalizeAccountNumber(
         string? accountNumber,
         string fieldName,
-        List<NormalizationWarning> warnings)
+        List<NormalizationWarning> warnings
+    )
     {
         if (string.IsNullOrWhiteSpace(accountNumber))
         {
@@ -278,11 +348,14 @@ public class NormalizationService : INormalizationService
         // Validate length (4-20 characters)
         if (normalized.Length < 4 || normalized.Length > 20)
         {
-            warnings.Add(new NormalizationWarning(
-                fieldName,
-                $"Account number length unusual ({normalized.Length} characters)",
-                accountNumber,
-                normalized));
+            warnings.Add(
+                new NormalizationWarning(
+                    fieldName,
+                    $"Account number length unusual ({normalized.Length} characters)",
+                    accountNumber,
+                    normalized
+                )
+            );
         }
 
         // Ensure masked format (***XXXX)
@@ -293,11 +366,14 @@ public class NormalizationService : INormalizationService
             {
                 var lastFour = normalized.Substring(normalized.Length - 4);
                 normalized = "***" + lastFour;
-                warnings.Add(new NormalizationWarning(
-                    fieldName,
-                    "Account number auto-masked for security",
-                    accountNumber,
-                    normalized));
+                warnings.Add(
+                    new NormalizationWarning(
+                        fieldName,
+                        "Account number auto-masked for security",
+                        accountNumber,
+                        normalized
+                    )
+                );
             }
         }
 
@@ -324,7 +400,8 @@ public class NormalizationService : INormalizationService
     private string GenerateDeduplicationHash(
         string emailContentHash,
         decimal? amount,
-        DateTime? date)
+        DateTime? date
+    )
     {
         var hashInput = new StringBuilder();
         hashInput.Append(emailContentHash);

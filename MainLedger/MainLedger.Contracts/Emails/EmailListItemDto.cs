@@ -6,10 +6,12 @@ namespace MainLedger.Contracts.Emails;
 public class EmailListItemDto
 {
     public Guid Id { get; init; }
+    public string MessageId { get; init; } = string.Empty;
     public string Subject { get; init; } = string.Empty;
     public string From { get; init; } = string.Empty;
     public DateTime ReceivedAt { get; init; }
     public string ProcessingStatus { get; init; } = string.Empty;
+    public string? ProcessingError { get; init; }
     public bool? IsFinancial { get; init; }
     public string? Category { get; init; }
     public double? ClassificationConfidence { get; init; }

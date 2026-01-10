@@ -8,29 +8,31 @@ public class ExtractionCandidateDto
     public Guid Id { get; init; }
     public Guid EmailId { get; init; }
     public string EmailSubject { get; init; } = string.Empty;
-    
+    public string EmailFrom { get; init; } = string.Empty;
+    public DateTime EmailReceivedAt { get; init; }
+
     // Core transaction data
     public decimal? Amount { get; init; }
     public string? Currency { get; init; }
     public string? Merchant { get; init; }
     public DateTime? TransactionDate { get; init; }
-    
+
     // Account information
     public string? SourceAccount { get; init; }
     public string? TargetAccount { get; init; }
     public string? SourceBank { get; init; }
     public string? TargetBank { get; init; }
-    
+
     // Additional details
     public decimal? Fees { get; init; }
     public decimal? Tax { get; init; }
     public string? ReferenceId { get; init; }
-    
+
     // Confidence scores
     public double? AmountConfidence { get; init; }
     public double? DateConfidence { get; init; }
     public double? MerchantConfidence { get; init; }
-    
+
     // Status
     public string Status { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }

@@ -8,6 +8,8 @@ public class ExtractionCandidateListItemDto
     public Guid Id { get; init; }
     public Guid EmailId { get; init; }
     public string EmailSubject { get; init; } = string.Empty;
+    public string EmailFrom { get; init; } = string.Empty;
+    public DateTime EmailReceivedAt { get; init; }
     public decimal? Amount { get; init; }
     public string? Currency { get; init; }
     public string? Merchant { get; init; }
