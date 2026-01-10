@@ -81,6 +81,8 @@ public class GetExtractionCandidatesQueryHandler
                 EmailReceivedAt =
                     emails.GetValueOrDefault(candidate.EmailMessageId)?.ReceivedAt
                     ?? DateTime.MinValue,
+                EmailMessageId =
+                    emails.GetValueOrDefault(candidate.EmailMessageId)?.MessageId ?? string.Empty,
                 Amount = candidate.Amount?.Amount,
                 Currency = candidate.Amount?.Currency.ToString(),
                 Merchant = candidate.Merchant,

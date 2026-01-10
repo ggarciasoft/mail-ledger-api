@@ -25,7 +25,8 @@ public class ExtractionCandidatesController : ControllerBase
     public ExtractionCandidatesController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<ExtractionCandidatesController> logger)
+        ILogger<ExtractionCandidatesController> logger
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
@@ -36,13 +37,16 @@ public class ExtractionCandidatesController : ControllerBase
     /// Get paginated list of extraction candidates with optional filtering.
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<PaginatedResponse<ExtractionCandidateListItemDto>>> GetCandidates(
+    public async Task<
+        ActionResult<PaginatedResponse<ExtractionCandidateListItemDto>>
+    > GetCandidates(
         [FromQuery] RecordStatus? status = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string sortBy = "createdAt",
         [FromQuery] string sortOrder = "desc",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -53,7 +57,14 @@ public class ExtractionCandidatesController : ControllerBase
 
         try
         {
-            var query = new GetExtractionCandidatesQuery(userId.Value, status, page, pageSize, sortBy, sortOrder);
+            var query = new GetExtractionCandidatesQuery(
+                userId.Value,
+                status,
+                page,
+                pageSize,
+                sortBy,
+                sortOrder
+            );
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -70,7 +81,8 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<ExtractionCandidateDto>> GetById(
         [FromRoute] Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -93,7 +105,12 @@ public class ExtractionCandidatesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting extraction candidate {CandidateId} for user {UserId}", id, userId);
+            _logger.LogError(
+                ex,
+                "Error getting extraction candidate {CandidateId} for user {UserId}",
+                id,
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -104,7 +121,8 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpPost("{id}/confirm")]
     public async Task<IActionResult> Confirm(
         [FromRoute] Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -118,12 +136,14 @@ public class ExtractionCandidatesController : ControllerBase
             var command = new ConfirmExtractionCandidateCommand(id, userId.Value);
             var financialRecordId = await _mediator.Send(command, cancellationToken);
 
-            return Ok(new
-            {
-                success = true,
-                message = "Extraction confirmed",
-                financialRecordId
-            });
+            return Ok(
+                new
+                {
+                    success = true,
+                    message = "Extraction confirmed",
+                    financialRecordId,
+                }
+            );
         }
         catch (KeyNotFoundException ex)
         {
@@ -139,7 +159,12 @@ public class ExtractionCandidatesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error confirming extraction candidate {CandidateId} for user {UserId}", id, userId);
+            _logger.LogError(
+                ex,
+                "Error confirming extraction candidate {CandidateId} for user {UserId}",
+                id,
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -151,7 +176,8 @@ public class ExtractionCandidatesController : ControllerBase
     public async Task<IActionResult> Reject(
         [FromRoute] Guid id,
         [FromBody] RejectExtractionRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -181,7 +207,12 @@ public class ExtractionCandidatesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error rejecting extraction candidate {CandidateId} for user {UserId}", id, userId);
+            _logger.LogError(
+                ex,
+                "Error rejecting extraction candidate {CandidateId} for user {UserId}",
+                id,
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -193,7 +224,8 @@ public class ExtractionCandidatesController : ControllerBase
     public async Task<IActionResult> Update(
         [FromRoute] Guid id,
         [FromBody] UpdateExtractionRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -205,10 +237,20 @@ public class ExtractionCandidatesController : ControllerBase
         try
         {
             var command = new UpdateExtractionCandidateCommand(
-                id, userId.Value,
-                request.Amount, request.Currency, request.Merchant,
-                request.TransactionDate, request.SourceAccount, request.TargetAccount,
-                request.SourceBank, request.TargetBank, request.Fees, request.Tax, request.ReferenceId);
+                id,
+                userId.Value,
+                request.Amount,
+                request.Currency,
+                request.Merchant,
+                request.TransactionDate,
+                request.SourceAccount,
+                request.TargetAccount,
+                request.SourceBank,
+                request.TargetBank,
+                request.Fees,
+                request.Tax,
+                request.ReferenceId
+            );
 
             await _mediator.Send(command, cancellationToken);
 
@@ -228,7 +270,99 @@ public class ExtractionCandidatesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating extraction candidate {CandidateId} for user {UserId}", id, userId);
+            _logger.LogError(
+                ex,
+                "Error updating extraction candidate {CandidateId} for user {UserId}",
+                id,
+                userId
+            );
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Bulk confirm multiple extraction candidates.
+    /// </summary>
+    [HttpPost("bulk-confirm")]
+    public async Task<ActionResult<BulkOperationResponse>> BulkConfirm(
+        [FromBody] BulkConfirmRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var command = new BulkConfirmExtractionCandidatesCommand(
+                request.CandidateIds,
+                userId.Value
+            );
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (result.Succeeded == 0)
+            {
+                return BadRequest(new { error = "All confirmations failed", details = result });
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error bulk confirming extraction candidates for user {UserId}",
+                userId
+            );
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Bulk reject multiple extraction candidates.
+    /// </summary>
+    [HttpPost("bulk-reject")]
+    public async Task<ActionResult<BulkOperationResponse>> BulkReject(
+        [FromBody] BulkRejectRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var command = new BulkRejectExtractionCandidatesCommand(
+                request.CandidateIds,
+                userId.Value,
+                request.Reason
+            );
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (result.Succeeded == 0)
+            {
+                return BadRequest(new { error = "All rejections failed", details = result });
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error bulk rejecting extraction candidates for user {UserId}",
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }

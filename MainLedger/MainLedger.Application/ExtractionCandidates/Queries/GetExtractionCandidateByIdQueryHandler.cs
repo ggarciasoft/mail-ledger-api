@@ -68,6 +68,7 @@ public class GetExtractionCandidateByIdQueryHandler
             EmailSubject = email.Subject,
             EmailFrom = email.From.Value,
             EmailReceivedAt = email.ReceivedAt,
+            EmailMessageId = email.MessageId,
             Amount = candidate.Amount?.Amount,
             Currency = candidate.Amount?.Currency.ToString(),
             Merchant = candidate.Merchant,

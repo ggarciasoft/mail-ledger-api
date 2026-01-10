@@ -10,6 +10,7 @@ public class ExtractionCandidateDto
     public string EmailSubject { get; init; } = string.Empty;
     public string EmailFrom { get; init; } = string.Empty;
     public DateTime EmailReceivedAt { get; init; }
+    public string EmailMessageId { get; init; } = string.Empty;
 
     // Core transaction data
     public decimal? Amount { get; init; }

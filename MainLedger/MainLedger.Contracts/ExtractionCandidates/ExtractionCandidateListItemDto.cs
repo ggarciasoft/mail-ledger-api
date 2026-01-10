@@ -10,6 +10,7 @@ public class ExtractionCandidateListItemDto
     public string EmailSubject { get; init; } = string.Empty;
     public string EmailFrom { get; init; } = string.Empty;
     public DateTime EmailReceivedAt { get; init; }
+    public string EmailMessageId { get; init; } = string.Empty;
     public decimal? Amount { get; init; }
     public string? Currency { get; init; }
     public string? Merchant { get; init; }
