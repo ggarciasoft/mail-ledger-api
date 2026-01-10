@@ -1,6 +1,7 @@
 using MainLedger.Domain.Repositories;
 using MainLedger.Infrastructure.Persistence;
 using MainLedger.Infrastructure.Persistence.Repositories;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -157,6 +158,11 @@ namespace MainLedger.API
                 MainLedger.Integrations.Services.GmailService
             >();
 
+            builder.Services.AddScoped<
+                Domain.Services.IPasswordHasher,
+                MainLedger.Infrastructure.Security.PasswordHasher
+            >();
+
             // Register MediatR
             builder.Services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(
@@ -189,9 +195,62 @@ namespace MainLedger.API
                                 ),
                             ClockSkew = TimeSpan.Zero,
                         };
-                });
+                })
+                .AddScheme<
+                    AuthenticationSchemeOptions,
+                    MainLedger.Infrastructure.Security.ApiKeyAuthenticationHandler
+                >("ApiKey", options => { });
 
-            builder.Services.AddAuthorization();
+            // Configure Authorization to support both JWT and API Key authentication
+            builder.Services.AddScoped<
+                Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+                MainLedger.Infrastructure.Security.ScopeAuthorizationHandler
+            >();
+
+            builder.Services.AddScoped<
+                Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
+                MainLedger.Infrastructure.Security.ApiKeyMustHaveExplicitScopeHandler
+            >();
+
+            builder.Services.AddAuthorization(options =>
+            {
+                options.DefaultPolicy =
+                    new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                        .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, "ApiKey")
+                        .RequireAuthenticatedUser()
+                        .AddRequirements(
+                            new MainLedger.Infrastructure.Security.ApiKeyMustHaveExplicitScopeRequirement()
+                        )
+                        .Build();
+
+                // Add scope-based policies for API key authorization
+                var allowedScopes = new[]
+                {
+                    "read:transactions",
+                    "write:transactions",
+                    "read:rules",
+                    "write:rules",
+                    "read:users",
+                    "write:users",
+                };
+
+                foreach (var scope in allowedScopes)
+                {
+                    options.AddPolicy(
+                        $"RequireScope:{scope}",
+                        policy =>
+                            policy
+                                .AddAuthenticationSchemes(
+                                    JwtBearerDefaults.AuthenticationScheme,
+                                    "ApiKey"
+                                )
+                                .RequireAuthenticatedUser()
+                                .Requirements.Add(
+                                    new MainLedger.Infrastructure.Security.ScopeRequirement(scope)
+                                )
+                    );
+                }
+            });
 
             // Add Swagger/OpenAPI
             builder.Services.AddEndpointsApiExplorer();

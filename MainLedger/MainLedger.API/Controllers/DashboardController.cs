@@ -22,7 +22,8 @@ public class DashboardController : ControllerBase
     public DashboardController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<DashboardController> logger)
+        ILogger<DashboardController> logger
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
@@ -33,8 +34,10 @@ public class DashboardController : ControllerBase
     /// Get dashboard overview with aggregated statistics.
     /// </summary>
     [HttpGet("overview")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<DashboardOverviewDto>> GetOverview(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -60,10 +63,12 @@ public class DashboardController : ControllerBase
     /// Get spending trends over time.
     /// </summary>
     [HttpGet("spending-trends")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<SpendingTrendsDto>> GetSpendingTrends(
         [FromQuery] string period = "month",
         [FromQuery] string groupBy = "day",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -89,11 +94,13 @@ public class DashboardController : ControllerBase
     /// Get top merchants by spending.
     /// </summary>
     [HttpGet("top-merchants")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<TopMerchantsDto>> GetTopMerchants(
         [FromQuery] int limit = 10,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)

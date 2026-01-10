@@ -22,7 +22,8 @@ public class UsersController : ControllerBase
     public UsersController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<UsersController> logger)
+        ILogger<UsersController> logger
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
@@ -36,17 +37,22 @@ public class UsersController : ControllerBase
     /// <response code="401">User is not authenticated</response>
     /// <response code="404">User not found</response>
     [HttpGet("me")]
-    [ProducesResponseType(typeof(Application.Authentication.Queries.UserDto), StatusCodes.Status200OK)]
+    [MainLedger.Infrastructure.Security.RequireScope("read:users")]
+    [ProducesResponseType(
+        typeof(Application.Authentication.Queries.UserDto),
+        StatusCodes.Status200OK
+    )]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<Application.Authentication.Queries.UserDto>> GetCurrentUser(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
             // Get userId from authenticated user context
             var userId = _currentUserService.GetUserId();
-            
+
             if (userId == null)
             {
                 _logger.LogWarning("User ID not found in authentication context");
@@ -67,7 +73,10 @@ public class UsersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting current user");
-            return StatusCode(500, new { error = "An error occurred while retrieving user information" });
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving user information" }
+            );
         }
     }
 }

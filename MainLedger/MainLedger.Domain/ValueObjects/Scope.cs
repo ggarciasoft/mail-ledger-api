@@ -31,7 +31,10 @@ public sealed class Scope : ValueObject
 
         var parts = value.Split(':');
         if (parts.Length != 2)
-            throw new ArgumentException("Scope must follow the pattern 'action:resource'.", nameof(value));
+            throw new ArgumentException(
+                "Scope must follow the pattern 'action:resource'.",
+                nameof(value)
+            );
 
         Value = value.ToLowerInvariant();
         Action = parts[0].ToLowerInvariant();
@@ -113,6 +116,29 @@ public sealed class Scope : ValueObject
         yield return ReadUsers;
         yield return WriteUsers;
         yield return AdminAll;
+    }
+
+    /// <summary>
+    /// Gets scopes allowed for API keys.
+    /// Only a restricted subset of scopes can be used for API keys.
+    /// </summary>
+    public static IEnumerable<Scope> GetAllowedApiKeyScopes()
+    {
+        yield return ReadTransactions;
+        yield return WriteTransactions;
+        yield return ReadRules;
+        yield return WriteRules;
+        yield return ReadUsers;
+        yield return WriteUsers;
+    }
+
+    /// <summary>
+    /// Validates if a scope is allowed for API keys.
+    /// </summary>
+    public static bool IsAllowedForApiKey(string scopeValue)
+    {
+        var allowedScopes = GetAllowedApiKeyScopes().Select(s => s.Value);
+        return allowedScopes.Contains(scopeValue, StringComparer.OrdinalIgnoreCase);
     }
 
     public override string ToString()

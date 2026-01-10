@@ -20,7 +20,8 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         IApiKeyRepository apiKeyRepository,
         IPasswordHasher passwordHasher,
         IUnitOfWork unitOfWork,
-        ILogger<CreateApiKeyCommandHandler> logger)
+        ILogger<CreateApiKeyCommandHandler> logger
+    )
     {
         _userRepository = userRepository;
         _apiKeyRepository = apiKeyRepository;
@@ -29,7 +30,10 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         _logger = logger;
     }
 
-    public async Task<CreateApiKeyResult> Handle(CreateApiKeyCommand request, CancellationToken cancellationToken)
+    public async Task<CreateApiKeyResult> Handle(
+        CreateApiKeyCommand request,
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation("Creating API key for user {UserId}", request.UserId);
 
@@ -51,6 +55,17 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
             throw new ArgumentException("At least one scope is required.");
         }
 
+        // Validate scopes are allowed for API keys
+        var invalidScopes = request.Scopes.Where(s => !Scope.IsAllowedForApiKey(s)).ToArray();
+
+        if (invalidScopes.Any())
+        {
+            throw new ArgumentException(
+                $"Invalid scopes for API key: {string.Join(", ", invalidScopes)}. "
+                    + "Allowed scopes: read:transactions, read:rules, write:rules, read:users, write:users"
+            );
+        }
+
         // Generate API key
         var apiKeyValue = ApiKeyValue.Generate("live");
         var keyHash = _passwordHasher.HashPassword(apiKeyValue.Value);
@@ -61,13 +76,18 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
             keyHash,
             request.Name,
             request.Scopes,
-            request.ExpiresAt);
+            request.ExpiresAt
+        );
 
         // Save
         await _apiKeyRepository.AddAsync(apiKey, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("API key {ApiKeyId} created for user {UserId}", apiKey.Id, request.UserId);
+        _logger.LogInformation(
+            "API key {ApiKeyId} created for user {UserId}",
+            apiKey.Id,
+            request.UserId
+        );
 
         // TODO: Publish ApiKeyCreatedEvent
 
@@ -77,6 +97,7 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
             apiKeyValue.Value,
             apiKey.Name,
             apiKey.Scopes,
-            apiKey.ExpiresAt);
+            apiKey.ExpiresAt
+        );
     }
 }

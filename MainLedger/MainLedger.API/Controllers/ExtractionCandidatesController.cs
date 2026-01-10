@@ -79,6 +79,7 @@ public class ExtractionCandidatesController : ControllerBase
     /// Get detailed information about a specific extraction candidate.
     /// </summary>
     [HttpGet("{id}")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<ExtractionCandidateDto>> GetById(
         [FromRoute] Guid id,
         CancellationToken cancellationToken = default

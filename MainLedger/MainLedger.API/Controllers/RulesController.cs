@@ -22,7 +22,8 @@ public class RulesController : ControllerBase
         IUserRepository userRepository,
         ICurrentUserService currentUserService,
         IUnitOfWork unitOfWork,
-        ILogger<RulesController> logger)
+        ILogger<RulesController> logger
+    )
     {
         _ruleRepository = ruleRepository;
         _userRepository = userRepository;
@@ -35,6 +36,7 @@ public class RulesController : ControllerBase
     /// Gets all rules for the current user (both active and inactive).
     /// </summary>
     [HttpGet]
+    [MainLedger.Infrastructure.Security.RequireScope("read:rules")]
     public async Task<IActionResult> GetUserRules(CancellationToken cancellationToken)
     {
         var userId = _currentUserService.GetUserId();
@@ -47,18 +49,20 @@ public class RulesController : ControllerBase
         try
         {
             var rules = await _ruleRepository.GetByUserIdAsync(userId.Value, cancellationToken);
-            return Ok(rules.Select(r => new
-            {
-                id = r.Id,
-                name = r.Name,
-                senderPattern = r.SenderPattern,
-                subjectPattern = r.SubjectPattern,
-                keywordPattern = r.KeywordPattern,
-                labelPattern = r.LabelPattern,
-                priority = r.Priority,
-                isActive = r.IsActive,
-                createdAt = r.CreatedAt
-            }));
+            return Ok(
+                rules.Select(r => new
+                {
+                    id = r.Id,
+                    name = r.Name,
+                    senderPattern = r.SenderPattern,
+                    subjectPattern = r.SubjectPattern,
+                    keywordPattern = r.KeywordPattern,
+                    labelPattern = r.LabelPattern,
+                    priority = r.Priority,
+                    isActive = r.IsActive,
+                    createdAt = r.CreatedAt,
+                })
+            );
         }
         catch (Exception ex)
         {
@@ -71,7 +75,11 @@ public class RulesController : ControllerBase
     /// Creates a new filtering rule.
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> CreateRule([FromBody] CreateRuleRequest request, CancellationToken cancellationToken)
+    [MainLedger.Infrastructure.Security.RequireScope("write:rules")]
+    public async Task<IActionResult> CreateRule(
+        [FromBody] CreateRuleRequest request,
+        CancellationToken cancellationToken
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -102,22 +110,24 @@ public class RulesController : ControllerBase
             await _ruleRepository.AddAsync(rule, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return Ok(new
-            {
-                id = rule.Id,
-                message = "Rule created successfully",
-                rule = new
+            return Ok(
+                new
                 {
                     id = rule.Id,
-                    name = rule.Name,
-                    senderPattern = rule.SenderPattern,
-                    subjectPattern = rule.SubjectPattern,
-                    keywordPattern = rule.KeywordPattern,
-                    labelPattern = rule.LabelPattern,
-                    priority = rule.Priority,
-                    isActive = rule.IsActive
+                    message = "Rule created successfully",
+                    rule = new
+                    {
+                        id = rule.Id,
+                        name = rule.Name,
+                        senderPattern = rule.SenderPattern,
+                        subjectPattern = rule.SubjectPattern,
+                        keywordPattern = rule.KeywordPattern,
+                        labelPattern = rule.LabelPattern,
+                        priority = rule.Priority,
+                        isActive = rule.IsActive,
+                    },
                 }
-            });
+            );
         }
         catch (Exception ex)
         {
@@ -130,6 +140,7 @@ public class RulesController : ControllerBase
     /// Gets a specific rule by ID.
     /// </summary>
     [HttpGet("{id}")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:rules")]
     public async Task<IActionResult> GetRule(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -140,20 +151,22 @@ public class RulesController : ControllerBase
                 return NotFound(new { error = "Rule not found." });
             }
 
-            return Ok(new
-            {
-                id = rule.Id,
-                userId = rule.UserId,
-                name = rule.Name,
-                senderPattern = rule.SenderPattern,
-                subjectPattern = rule.SubjectPattern,
-                keywordPattern = rule.KeywordPattern,
-                labelPattern = rule.LabelPattern,
-                priority = rule.Priority,
-                isActive = rule.IsActive,
-                createdAt = rule.CreatedAt,
-                updatedAt = rule.UpdatedAt
-            });
+            return Ok(
+                new
+                {
+                    id = rule.Id,
+                    userId = rule.UserId,
+                    name = rule.Name,
+                    senderPattern = rule.SenderPattern,
+                    subjectPattern = rule.SubjectPattern,
+                    keywordPattern = rule.KeywordPattern,
+                    labelPattern = rule.LabelPattern,
+                    priority = rule.Priority,
+                    isActive = rule.IsActive,
+                    createdAt = rule.CreatedAt,
+                    updatedAt = rule.UpdatedAt,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -165,10 +178,12 @@ public class RulesController : ControllerBase
     /// Updates a rule (name, patterns, and/or priority).
     /// </summary>
     [HttpPut("{id}")]
+    [MainLedger.Infrastructure.Security.RequireScope("write:rules")]
     public async Task<IActionResult> UpdateRule(
         Guid id,
         [FromBody] UpdateRuleRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -222,7 +237,8 @@ public class RulesController : ControllerBase
     public async Task<IActionResult> UpdateRuleName(
         Guid id,
         [FromBody] UpdateRuleNameRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -257,7 +273,8 @@ public class RulesController : ControllerBase
     public async Task<IActionResult> UpdateRulePatterns(
         Guid id,
         [FromBody] UpdateRulePatternsRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -292,7 +309,8 @@ public class RulesController : ControllerBase
     public async Task<IActionResult> UpdateRulePriority(
         Guid id,
         [FromBody] UpdateRulePriorityRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -396,4 +414,3 @@ public record UpdateRulePatternsRequest(
 );
 
 public record UpdateRulePriorityRequest(int Priority);
-

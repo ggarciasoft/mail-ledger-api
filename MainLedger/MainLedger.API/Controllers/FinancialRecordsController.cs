@@ -24,7 +24,8 @@ public class FinancialRecordsController : ControllerBase
     public FinancialRecordsController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<FinancialRecordsController> logger)
+        ILogger<FinancialRecordsController> logger
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
@@ -35,6 +36,7 @@ public class FinancialRecordsController : ControllerBase
     /// Get paginated list of confirmed financial records with extensive filtering.
     /// </summary>
     [HttpGet]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<PaginatedResponse<FinancialRecordListItemDto>>> GetRecords(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
@@ -47,7 +49,8 @@ public class FinancialRecordsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string sortBy = "transactionDate",
         [FromQuery] string sortOrder = "desc",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -58,18 +61,29 @@ public class FinancialRecordsController : ControllerBase
 
         try
         {
-// Convert dates to UTC for PostgreSQL compatibility
-var startDateUtc = startDate.HasValue 
-    ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc) 
-    : (DateTime?)null;
-var endDateUtc = endDate.HasValue 
-    ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc) 
-    : (DateTime?)null;
+            // Convert dates to UTC for PostgreSQL compatibility
+            var startDateUtc = startDate.HasValue
+                ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc)
+                : (DateTime?)null;
+            var endDateUtc = endDate.HasValue
+                ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc)
+                : (DateTime?)null;
 
-var query = new GetFinancialRecordsQuery(
-    userId.Value, startDateUtc, endDateUtc, minAmount, maxAmount,
-    merchant, currency, sourceBank, page, pageSize, sortBy, sortOrder);
-            
+            var query = new GetFinancialRecordsQuery(
+                userId.Value,
+                startDateUtc,
+                endDateUtc,
+                minAmount,
+                maxAmount,
+                merchant,
+                currency,
+                sourceBank,
+                page,
+                pageSize,
+                sortBy,
+                sortOrder
+            );
+
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -84,9 +98,11 @@ var query = new GetFinancialRecordsQuery(
     /// Get detailed information about a specific financial record.
     /// </summary>
     [HttpGet("{id}")]
+    [MainLedger.Infrastructure.Security.RequireScope("read:transactions")]
     public async Task<ActionResult<FinancialRecordDto>> GetById(
         [FromRoute] Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -109,7 +125,12 @@ var query = new GetFinancialRecordsQuery(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting financial record {RecordId} for user {UserId}", id, userId);
+            _logger.LogError(
+                ex,
+                "Error getting financial record {RecordId} for user {UserId}",
+                id,
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -121,7 +142,8 @@ var query = new GetFinancialRecordsQuery(
     public async Task<ActionResult<FinancialRecordStatisticsDto>> GetStatistics(
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -138,7 +160,11 @@ var query = new GetFinancialRecordsQuery(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting financial record statistics for user {UserId}", userId);
+            _logger.LogError(
+                ex,
+                "Error getting financial record statistics for user {UserId}",
+                userId
+            );
             return BadRequest(new { error = ex.Message });
         }
     }
