@@ -19,6 +19,7 @@ public class EmailSyncBackgroundJob
     private readonly IRulesEngine _rulesEngine;
     private readonly IProcessingJobRepository _jobRepository;
     private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
+    private readonly IJobNotificationService _jobNotificationService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<EmailSyncBackgroundJob> _logger;
 
@@ -30,6 +31,7 @@ public class EmailSyncBackgroundJob
         IRulesEngine rulesEngine,
         IProcessingJobRepository jobRepository,
         IGmailSyncHistoryRepository syncHistoryRepository,
+        IJobNotificationService jobNotificationService,
         IUnitOfWork unitOfWork,
         ILogger<EmailSyncBackgroundJob> logger
     )
@@ -41,6 +43,7 @@ public class EmailSyncBackgroundJob
         _rulesEngine = rulesEngine;
         _jobRepository = jobRepository;
         _syncHistoryRepository = syncHistoryRepository;
+        _jobNotificationService = jobNotificationService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -173,6 +176,9 @@ public class EmailSyncBackgroundJob
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Notify clients of job completion
+            await _jobNotificationService.NotifyJobCompleted(userId, job);
+
             _logger.LogInformation(
                 "Email sync job {JobId} completed: {Fetched} fetched, {Saved} saved, {Ignored} ignored",
                 jobId,
@@ -205,6 +211,10 @@ public class EmailSyncBackgroundJob
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Notify clients of job failure
+            await _jobNotificationService.NotifyJobFailed(userId, job);
+
             throw;
         }
     }

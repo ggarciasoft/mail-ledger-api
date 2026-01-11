@@ -6,6 +6,7 @@ using MainLedger.Infrastructure.Persistence.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace MainLedger.API
@@ -173,6 +174,23 @@ namespace MainLedger.API
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ClassificationBackgroundJob>();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ExtractionBackgroundJob>();
 
+            // Register SignalR
+            builder.Services.AddSignalR();
+
+            // Register Job Notification Service with JobHub context
+            builder.Services.AddScoped<MainLedger.Application.Common.Interfaces.IJobNotificationService>(
+                sp =>
+                {
+                    var hubContext = sp.GetRequiredService<
+                        IHubContext<MainLedger.API.Hubs.JobHub>
+                    >();
+                    // Cast to IHubContext<Hub> to avoid circular dependency
+                    return new MainLedger.Infrastructure.Services.SignalRJobNotificationService(
+                        (IHubContext<Hub>)(object)hubContext
+                    );
+                }
+            );
+
             // Register Gmail Integration
             builder.Services.Configure<MainLedger.Domain.Settings.GmailSettings>(
                 builder.Configuration.GetSection(
@@ -321,6 +339,9 @@ namespace MainLedger.API
             app.UseAuthorization();
 
             app.MapControllers();
+
+            // Map SignalR Hub
+            app.MapHub<MainLedger.API.Hubs.JobHub>("/hubs/jobs");
 
             app.Run();
         }

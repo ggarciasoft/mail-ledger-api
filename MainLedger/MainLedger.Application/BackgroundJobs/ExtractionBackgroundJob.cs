@@ -18,6 +18,7 @@ public class ExtractionBackgroundJob
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IProcessingJobRepository _jobRepository;
     private readonly IExtractionVersionRepository _versionRepository;
+    private readonly IJobNotificationService _jobNotificationService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ExtractionBackgroundJob> _logger;
 
@@ -28,6 +29,7 @@ public class ExtractionBackgroundJob
         IExtractionCandidateRepository candidateRepository,
         IProcessingJobRepository jobRepository,
         IExtractionVersionRepository versionRepository,
+        IJobNotificationService jobNotificationService,
         IUnitOfWork unitOfWork,
         ILogger<ExtractionBackgroundJob> logger
     )
@@ -38,6 +40,7 @@ public class ExtractionBackgroundJob
         _candidateRepository = candidateRepository;
         _jobRepository = jobRepository;
         _versionRepository = versionRepository;
+        _jobNotificationService = jobNotificationService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -247,6 +250,9 @@ public class ExtractionBackgroundJob
             job.Complete();
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Notify clients of job completion
+            await _jobNotificationService.NotifyJobCompleted(userId, job);
+
             _logger.LogInformation(
                 "Extraction job {JobId} completed: {Success} success, {Failure} failures",
                 jobId,
@@ -259,6 +265,10 @@ public class ExtractionBackgroundJob
             _logger.LogError(ex, "Extraction job {JobId} failed", jobId);
             job.Fail(ex.Message);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Notify clients of job failure
+            await _jobNotificationService.NotifyJobFailed(userId, job);
+
             throw;
         }
     }

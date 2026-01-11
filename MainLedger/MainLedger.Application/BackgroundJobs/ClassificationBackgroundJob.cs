@@ -14,6 +14,7 @@ public class ClassificationBackgroundJob
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IClassificationService _classificationService;
     private readonly IProcessingJobRepository _jobRepository;
+    private readonly IJobNotificationService _jobNotificationService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ClassificationBackgroundJob> _logger;
 
@@ -21,6 +22,7 @@ public class ClassificationBackgroundJob
         IEmailMessageRepository emailRepository,
         IClassificationService classificationService,
         IProcessingJobRepository jobRepository,
+        IJobNotificationService jobNotificationService,
         IUnitOfWork unitOfWork,
         ILogger<ClassificationBackgroundJob> logger
     )
@@ -28,6 +30,7 @@ public class ClassificationBackgroundJob
         _emailRepository = emailRepository;
         _classificationService = classificationService;
         _jobRepository = jobRepository;
+        _jobNotificationService = jobNotificationService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -108,6 +111,9 @@ public class ClassificationBackgroundJob
             job.Complete();
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Notify clients of job completion
+            await _jobNotificationService.NotifyJobCompleted(userId, job);
+
             _logger.LogInformation(
                 "Classification job {JobId} completed: {Success} success, {Failure} failures",
                 jobId,
@@ -120,6 +126,10 @@ public class ClassificationBackgroundJob
             _logger.LogError(ex, "Classification job {JobId} failed", jobId);
             job.Fail(ex.Message);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Notify clients of job failure
+            await _jobNotificationService.NotifyJobFailed(userId, job);
+
             throw;
         }
     }
