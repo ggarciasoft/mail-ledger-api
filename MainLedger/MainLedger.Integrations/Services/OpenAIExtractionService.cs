@@ -34,6 +34,22 @@ public class OpenAIExtractionService : IExtractionService
         CancellationToken cancellationToken = default
     )
     {
+        // Use simulation mode if enabled
+        if (_settings.UseSimulation)
+        {
+            _logger.LogInformation(
+                "SIMULATION MODE: Extracting financial data from email {MessageId} with mock data",
+                email.MessageId
+            );
+
+            // Simulate API latency with random delay (0-1 second)
+            var random = new Random();
+            var delayMs = random.Next(0, 1000);
+            await Task.Delay(delayMs, cancellationToken);
+
+            return GenerateRandomExtraction(email);
+        }
+
         try
         {
             // Truncate body for cost control
@@ -100,6 +116,60 @@ public class OpenAIExtractionService : IExtractionService
         }
     }
 
+    private ExtractionResult GenerateRandomExtraction(EmailMessage email)
+    {
+        var random = new Random();
+        var merchants = new[]
+        {
+            "Amazon",
+            "Uber",
+            "Netflix",
+            "Spotify",
+            "Walmart",
+            "Target",
+            "Starbucks",
+            "McDonald's",
+        };
+        var currencies = new[] { "USD", "EUR", "DOP" };
+        var banks = new[]
+        {
+            "Chase",
+            "Bank of America",
+            "Wells Fargo",
+            "BHD",
+            "Popular",
+            "Citibank",
+        };
+
+        var amount = (decimal)(random.NextDouble() * 500 + 10); // $10 to $510
+        var currency = currencies[random.Next(currencies.Length)];
+        var merchant = merchants[random.Next(merchants.Length)];
+        var transactionDate = DateTime.UtcNow.AddDays(-random.Next(0, 30));
+        var sourceAccount = $"***{random.Next(1000, 9999)}";
+        var sourceBank = banks[random.Next(banks.Length)];
+        var referenceId = $"TXN-{random.Next(100000, 999999)}";
+
+        return new ExtractionResult
+        {
+            Amount = Math.Round(amount, 2),
+            Currency = currency,
+            TransactionDate = transactionDate,
+            Merchant = merchant,
+            SourceAccount = sourceAccount,
+            TargetAccount = null,
+            SourceBank = sourceBank,
+            TargetBank = null,
+            Fees = random.Next(0, 100) < 20 ? (decimal?)(random.NextDouble() * 5) : null,
+            Tax = random.Next(0, 100) < 30 ? (decimal?)(amount * 0.18m) : null,
+            ReferenceId = referenceId,
+            AmountConfidence = random.NextDouble() * 0.2 + 0.8, // 0.8 to 1.0
+            DateConfidence = random.NextDouble() * 0.2 + 0.8,
+            MerchantConfidence = random.NextDouble() * 0.2 + 0.8,
+            Reasoning =
+                $"SIMULATED: Random extraction for testing (Merchant: {merchant}, Amount: {amount:F2} {currency})",
+            HasAmbiguities = false,
+        };
+    }
 
     private string CleanHtml(string html)
     {
@@ -113,45 +183,52 @@ public class OpenAIExtractionService : IExtractionService
             cleaned,
             @"<style[^>]*>.*?</style>",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.Singleline
+        );
 
         // Remove script tags and their content
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"<script[^>]*>.*?</script>",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.Singleline
+        );
 
         // Remove style attributes with double quotes
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+style\s*=\s*""[^""]*""",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         // Remove style attributes with single quotes
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+style\s*=\s*'[^']*'",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         // Remove class attributes (optional - reduces noise)
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+class\s*=\s*""[^""]*""",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+class\s*=\s*'[^']*'",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         return cleaned;
     }
-
 
     private string GetSystemPrompt()
     {

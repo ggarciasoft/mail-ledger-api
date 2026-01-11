@@ -36,6 +36,22 @@ public class OpenAIClassificationService : IClassificationService
         CancellationToken cancellationToken = default
     )
     {
+        // Use simulation mode if enabled
+        if (_settings.UseSimulation)
+        {
+            _logger.LogInformation(
+                "SIMULATION MODE: Classifying email {MessageId} with mock data",
+                email.MessageId
+            );
+
+            // Simulate API latency with random delay (0-1 second)
+            var random = new Random();
+            var delayMs = random.Next(0, 1000);
+            await Task.Delay(delayMs, cancellationToken);
+
+            return GenerateRandomClassification(email);
+        }
+
         try
         {
             // Clean and truncate body for cost control
@@ -99,6 +115,29 @@ public class OpenAIClassificationService : IClassificationService
         }
     }
 
+    private ClassificationResult GenerateRandomClassification(EmailMessage email)
+    {
+        var random = new Random();
+        var isFinancial = random.Next(0, 100) < 70; // 70% chance of being financial
+
+        EmailCategory? category = null;
+        if (isFinancial)
+        {
+            var categories = Enum.GetValues<EmailCategory>();
+            category = categories[random.Next(categories.Length)];
+        }
+
+        var confidence = random.NextDouble() * 0.3 + 0.7; // 0.7 to 1.0
+
+        return new ClassificationResult
+        {
+            IsFinancial = isFinancial,
+            Category = category,
+            Confidence = Confidence.Create(confidence),
+            Reasoning = $"SIMULATED: Random classification for testing (Subject: {email.Subject})",
+        };
+    }
+
     private string CleanHtml(string html)
     {
         if (string.IsNullOrWhiteSpace(html))
@@ -111,41 +150,49 @@ public class OpenAIClassificationService : IClassificationService
             cleaned,
             @"<style[^>]*>.*?</style>",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.Singleline
+        );
 
         // Remove script tags and their content
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"<script[^>]*>.*?</script>",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.Singleline
+        );
 
         // Remove style attributes with double quotes
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+style\s*=\s*""[^""]*""",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         // Remove style attributes with single quotes
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+style\s*=\s*'[^']*'",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         // Remove class attributes (optional - reduces noise)
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+class\s*=\s*""[^""]*""",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"\s+class\s*=\s*'[^']*'",
             "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 
         return cleaned;
     }

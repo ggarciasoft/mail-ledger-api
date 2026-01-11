@@ -18,6 +18,7 @@ public class EmailSyncBackgroundJob
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
     private readonly IProcessingJobRepository _jobRepository;
+    private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<EmailSyncBackgroundJob> _logger;
 
@@ -28,6 +29,7 @@ public class EmailSyncBackgroundJob
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
         IProcessingJobRepository jobRepository,
+        IGmailSyncHistoryRepository syncHistoryRepository,
         IUnitOfWork unitOfWork,
         ILogger<EmailSyncBackgroundJob> logger
     )
@@ -38,6 +40,7 @@ public class EmailSyncBackgroundJob
         _ruleRepository = ruleRepository;
         _rulesEngine = rulesEngine;
         _jobRepository = jobRepository;
+        _syncHistoryRepository = syncHistoryRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -78,6 +81,11 @@ public class EmailSyncBackgroundJob
 
             // Load user's active rules
             var rules = await _ruleRepository.GetActiveByUserIdAsync(userId, cancellationToken);
+
+            // Create sync history record
+            var syncHistory = GmailSyncHistory.Create(userId, connection.HistoryId);
+            await _syncHistoryRepository.AddAsync(syncHistory, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             // Fetch emails
             var fetchedEmails = await _gmailService.FetchEmailsAsync(
@@ -158,6 +166,11 @@ public class EmailSyncBackgroundJob
             // Final update
             job.UpdateProgress(processedCount, savedCount, ignoredCount);
             job.Complete();
+
+            // Complete sync history
+            syncHistory.Complete(fetchedEmails.Count, savedCount, true);
+            await _syncHistoryRepository.UpdateAsync(syncHistory, cancellationToken);
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
@@ -172,6 +185,25 @@ public class EmailSyncBackgroundJob
         {
             _logger.LogError(ex, "Email sync job {JobId} failed", jobId);
             job.Fail(ex.Message);
+
+            // Try to mark sync history as failed
+            try
+            {
+                var failedSyncHistory = await _syncHistoryRepository.GetLatestByUserIdAsync(
+                    userId,
+                    cancellationToken
+                );
+                if (failedSyncHistory != null && failedSyncHistory.SyncCompletedAt == null)
+                {
+                    failedSyncHistory.Complete(0, 0, false, ex.Message);
+                    await _syncHistoryRepository.UpdateAsync(failedSyncHistory, cancellationToken);
+                }
+            }
+            catch
+            {
+                // Ignore errors updating sync history on failure
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             throw;
         }

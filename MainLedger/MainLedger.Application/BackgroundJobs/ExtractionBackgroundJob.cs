@@ -17,6 +17,7 @@ public class ExtractionBackgroundJob
     private readonly INormalizationService _normalizationService;
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IProcessingJobRepository _jobRepository;
+    private readonly IExtractionVersionRepository _versionRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ExtractionBackgroundJob> _logger;
 
@@ -26,6 +27,7 @@ public class ExtractionBackgroundJob
         INormalizationService normalizationService,
         IExtractionCandidateRepository candidateRepository,
         IProcessingJobRepository jobRepository,
+        IExtractionVersionRepository versionRepository,
         IUnitOfWork unitOfWork,
         ILogger<ExtractionBackgroundJob> logger
     )
@@ -35,6 +37,7 @@ public class ExtractionBackgroundJob
         _normalizationService = normalizationService;
         _candidateRepository = candidateRepository;
         _jobRepository = jobRepository;
+        _versionRepository = versionRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -61,6 +64,13 @@ public class ExtractionBackgroundJob
                 jobId,
                 userId
             );
+
+            // Get active extraction version
+            var version = await _versionRepository.GetActiveAsync(cancellationToken);
+            if (version == null)
+            {
+                throw new InvalidOperationException("No active extraction version found");
+            }
 
             // Get classified financial emails
             var emails = await _emailRepository.GetPendingExtractionAsync(
@@ -102,7 +112,7 @@ public class ExtractionBackgroundJob
                     }
 
                     // Create extraction candidate
-                    var candidate = ExtractionCandidate.Create(email.Id, Guid.NewGuid()); // TODO: Get actual version ID
+                    var candidate = ExtractionCandidate.Create(email.Id, version.Id);
 
                     // Set transaction data
                     Domain.ValueObjects.Money? amount = null;
@@ -211,7 +221,7 @@ public class ExtractionBackgroundJob
                     await _candidateRepository.AddAsync(candidate, cancellationToken);
 
                     // Mark email as extracted
-                    email.MarkAsProcessed();
+                    email.SetProcessingStatus(EmailProcessingStatus.Extracted);
                     _emailRepository.Update(email);
 
                     successCount++;

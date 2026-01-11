@@ -80,6 +80,10 @@ public class ClassificationBackgroundJob
 
                     // Set classification based on result
                     email.SetClassification(result.IsFinancial, result.Category, result.Confidence);
+
+                    // Update processing status to Classified
+                    email.SetProcessingStatus(EmailProcessingStatus.Classified);
+
                     _emailRepository.Update(email);
                     successCount++;
                 }

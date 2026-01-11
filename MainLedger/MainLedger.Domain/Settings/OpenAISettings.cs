@@ -31,4 +31,10 @@ public class OpenAISettings
     /// Maximum length of email body to send (for cost control).
     /// </summary>
     public int MaxBodyLength { get; set; } = 2000;
+
+    /// <summary>
+    /// Use simulation mode instead of calling OpenAI API (for development/testing).
+    /// When enabled, returns random mock data instead of making actual API calls.
+    /// </summary>
+    public bool UseSimulation { get; set; } = false;
 }
