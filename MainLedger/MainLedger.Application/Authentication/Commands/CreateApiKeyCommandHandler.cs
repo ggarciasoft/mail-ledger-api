@@ -70,13 +70,24 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         var apiKeyValue = ApiKeyValue.Generate("live");
         var keyHash = _passwordHasher.HashPassword(apiKeyValue.Value);
 
+        // Convert ExpiresAt to UTC if provided
+        DateTime? expiresAtUtc = null;
+        if (request.ExpiresAt.HasValue)
+        {
+            // If the DateTime has no timezone info (Unspecified), treat it as UTC
+            expiresAtUtc =
+                request.ExpiresAt.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(request.ExpiresAt.Value, DateTimeKind.Utc)
+                    : request.ExpiresAt.Value.ToUniversalTime();
+        }
+
         // Create API key entity
         var apiKey = ApiKey.Create(
             request.UserId,
             keyHash,
             request.Name,
             request.Scopes,
-            request.ExpiresAt
+            expiresAtUtc
         );
 
         // Save

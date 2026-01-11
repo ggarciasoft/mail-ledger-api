@@ -74,6 +74,7 @@ namespace MainLedger.API
                 ExtractionCandidateRepository
             >();
             builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+            builder.Services.AddScoped<IGmailSyncHistoryRepository, GmailSyncHistoryRepository>();
             builder.Services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
             builder.Services.AddScoped<
                 IEmailVerificationTokenRepository,

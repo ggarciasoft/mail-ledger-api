@@ -10,6 +10,7 @@ public class EmailListItemDto
     public string Subject { get; init; } = string.Empty;
     public string From { get; init; } = string.Empty;
     public DateTime ReceivedAt { get; init; }
+    public DateTime CreatedAt { get; init; }
     public string ProcessingStatus { get; init; } = string.Empty;
     public string? ProcessingError { get; init; }
     public bool? IsFinancial { get; init; }

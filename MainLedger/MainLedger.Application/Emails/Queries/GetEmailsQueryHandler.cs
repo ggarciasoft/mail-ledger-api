@@ -60,6 +60,7 @@ public class GetEmailsQueryHandler
                 Subject = email.Subject,
                 From = email.From.Value,
                 ReceivedAt = email.ReceivedAt,
+                CreatedAt = email.CreatedAt,
                 ProcessingStatus = email.ProcessingStatus.ToString(),
                 ProcessingError = email.ProcessingError,
                 IsFinancial = email.IsFinancial,

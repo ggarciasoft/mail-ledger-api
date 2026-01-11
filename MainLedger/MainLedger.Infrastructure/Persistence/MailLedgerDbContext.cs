@@ -1,6 +1,6 @@
+using System.Reflection;
 using MainLedger.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Reflection;
 
 namespace MainLedger.Infrastructure.Persistence;
 
@@ -10,19 +10,18 @@ namespace MainLedger.Infrastructure.Persistence;
 public class MailLedgerDbContext : DbContext
 {
     public MailLedgerDbContext(DbContextOptions<MailLedgerDbContext> options)
-        : base(options)
-    {
-    }
+        : base(options) { }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<GmailConnection> GmailConnections => Set<GmailConnection>();
+    public DbSet<GmailSyncHistory> GmailSyncHistories => Set<GmailSyncHistory>();
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
     public DbSet<Rule> Rules => Set<Rule>();
     public DbSet<FinancialRecord> FinancialRecords => Set<FinancialRecord>();
     public DbSet<ExtractionVersion> ExtractionVersions => Set<ExtractionVersion>();
     public DbSet<ExtractionCandidate> ExtractionCandidates => Set<ExtractionCandidate>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
-    
+
     // Authentication entities
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -47,4 +46,3 @@ public class MailLedgerDbContext : DbContext
         return await base.SaveChangesAsync(cancellationToken);
     }
 }
-

@@ -22,7 +22,8 @@ public class GmailController : ControllerBase
         IGmailService gmailService,
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<GmailController> logger)
+        ILogger<GmailController> logger
+    )
     {
         _gmailService = gmailService;
         _mediator = mediator;
@@ -52,7 +53,11 @@ public class GmailController : ControllerBase
     /// </summary>
     [HttpGet("callback")]
     [AllowAnonymous] // Allow anonymous for OAuth callback
-    public async Task<IActionResult> Callback([FromQuery] string code, [FromQuery] string state, CancellationToken cancellationToken)
+    public async Task<IActionResult> Callback(
+        [FromQuery] string code,
+        [FromQuery] string state,
+        CancellationToken cancellationToken
+    )
     {
         if (!Guid.TryParse(state, out var userId))
         {
@@ -61,8 +66,18 @@ public class GmailController : ControllerBase
 
         try
         {
-            var connection = await _gmailService.HandleCallbackAsync(userId, code, cancellationToken);
-            return Ok(new { message = "Gmail connected successfully", email = connection.Email.ToString() });
+            var connection = await _gmailService.HandleCallbackAsync(
+                userId,
+                code,
+                cancellationToken
+            );
+            return Ok(
+                new
+                {
+                    message = "Gmail connected successfully",
+                    email = connection.Email.ToString(),
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -75,8 +90,12 @@ public class GmailController : ControllerBase
     /// Triggers email synchronization for the current user's connected Gmail account.
     /// Emails are saved with Pending status for batch processing.
     /// </summary>
+    /// <param name="maxEmails">Maximum number of emails to fetch (default: 50, max: 100)</param>
     [HttpPost("sync")]
-    public async Task<IActionResult> SyncEmails(CancellationToken cancellationToken)
+    public async Task<IActionResult> SyncEmails(
+        [FromQuery] int maxEmails = 50,
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -85,11 +104,17 @@ public class GmailController : ControllerBase
             return Unauthorized(new { error = "User not authenticated" });
         }
 
+        // Validate maxEmails parameter
+        if (maxEmails < 1 || maxEmails > 100)
+        {
+            return BadRequest(new { error = "maxEmails must be between 1 and 100" });
+        }
+
         try
         {
-            var command = new SyncGmailEmailsCommand(userId.Value);
+            var command = new SyncGmailEmailsCommand(userId.Value, maxEmails);
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -106,7 +131,8 @@ public class GmailController : ControllerBase
     [HttpPost("batch-classify")]
     public async Task<IActionResult> BatchClassifyEmails(
         [FromQuery] int batchSize = 20,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -119,7 +145,7 @@ public class GmailController : ControllerBase
         {
             var command = new BatchClassifyEmailsCommand(userId.Value, batchSize);
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -136,7 +162,8 @@ public class GmailController : ControllerBase
     [HttpPost("batch-extract")]
     public async Task<IActionResult> BatchExtractFinancialData(
         [FromQuery] int batchSize = 20,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -149,7 +176,7 @@ public class GmailController : ControllerBase
         {
             var command = new BatchExtractFinancialDataCommand(userId.Value, batchSize);
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -174,7 +201,9 @@ public class GmailController : ControllerBase
 
         try
         {
-            var query = new MainLedger.Application.Gmail.Queries.GetGmailConnectionStatusQuery(userId.Value);
+            var query = new MainLedger.Application.Gmail.Queries.GetGmailConnectionStatusQuery(
+                userId.Value
+            );
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -191,7 +220,8 @@ public class GmailController : ControllerBase
     [HttpGet("sync-history")]
     public async Task<IActionResult> GetSyncHistory(
         [FromQuery] int limit = 10,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -202,7 +232,10 @@ public class GmailController : ControllerBase
 
         try
         {
-            var query = new MainLedger.Application.Gmail.Queries.GetSyncHistoryQuery(userId.Value, limit);
+            var query = new MainLedger.Application.Gmail.Queries.GetSyncHistoryQuery(
+                userId.Value,
+                limit
+            );
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }

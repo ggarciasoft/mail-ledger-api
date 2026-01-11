@@ -17,28 +17,44 @@ public class EmailMessageRepository : IEmailMessageRepository
         _context = context;
     }
 
-    public async Task<EmailMessage?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<EmailMessage?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        return await _context.EmailMessages.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
     }
 
-    public async Task<EmailMessage?> GetByMessageIdAsync(string messageId, CancellationToken cancellationToken = default)
+    public async Task<EmailMessage?> GetByMessageIdAsync(
+        string messageId,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .FirstOrDefaultAsync(e => e.MessageId == messageId, cancellationToken);
+        return await _context.EmailMessages.FirstOrDefaultAsync(
+            e => e.MessageId == messageId,
+            cancellationToken
+        );
     }
 
-    public async Task<bool> ExistsByContentHashAsync(string contentHash, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsByContentHashAsync(
+        string contentHash,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .AnyAsync(e => e.ContentHash == contentHash, cancellationToken);
+        return await _context.EmailMessages.AnyAsync(
+            e => e.ContentHash == contentHash,
+            cancellationToken
+        );
     }
 
-    public async Task<List<EmailMessage>> GetUnprocessedAsync(Guid userId, int limit, CancellationToken cancellationToken = default)
+    public async Task<List<EmailMessage>> GetUnprocessedAsync(
+        Guid userId,
+        int limit,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .Where(e => e.UserId == userId && !e.IsProcessed)
+        return await _context
+            .EmailMessages.Where(e => e.UserId == userId && !e.IsProcessed)
             .OrderBy(e => e.ReceivedAt)
             .Take(limit)
             .ToListAsync(cancellationToken);
@@ -48,10 +64,11 @@ public class EmailMessageRepository : IEmailMessageRepository
         Guid userId,
         Domain.Enums.EmailProcessingStatus status,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .Where(e => e.UserId == userId && e.ProcessingStatus == status)
+        return await _context
+            .EmailMessages.Where(e => e.UserId == userId && e.ProcessingStatus == status)
             .OrderBy(e => e.ReceivedAt)
             .Take(limit)
             .ToListAsync(cancellationToken);
@@ -60,12 +77,15 @@ public class EmailMessageRepository : IEmailMessageRepository
     public async Task<List<EmailMessage>> GetClassifiedFinancialEmailsAsync(
         Guid userId,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .Where(e => e.UserId == userId 
+        return await _context
+            .EmailMessages.Where(e =>
+                e.UserId == userId
                 && e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified
-                && e.IsFinancial == true)
+                && e.IsFinancial == true
+            )
             .OrderBy(e => e.ReceivedAt)
             .Take(limit)
             .ToListAsync(cancellationToken);
@@ -79,7 +99,8 @@ public class EmailMessageRepository : IEmailMessageRepository
         int pageSize,
         string sortBy,
         string sortOrder,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var query = _context.EmailMessages.Where(e => e.UserId == userId);
 
@@ -100,8 +121,8 @@ public class EmailMessageRepository : IEmailMessageRepository
         // Apply sorting
         query = sortBy.ToLowerInvariant() switch
         {
-            "subject" => sortOrder.ToLowerInvariant() == "asc" 
-                ? query.OrderBy(e => e.Subject) 
+            "subject" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(e => e.Subject)
                 : query.OrderByDescending(e => e.Subject),
             "from" => sortOrder.ToLowerInvariant() == "asc"
                 ? query.OrderBy(e => e.From.Value)
@@ -111,7 +132,7 @@ public class EmailMessageRepository : IEmailMessageRepository
                 : query.OrderByDescending(e => e.ProcessingStatus),
             _ => sortOrder.ToLowerInvariant() == "asc"
                 ? query.OrderBy(e => e.ReceivedAt)
-                : query.OrderByDescending(e => e.ReceivedAt)
+                : query.OrderByDescending(e => e.ReceivedAt),
         };
 
         // Apply pagination
@@ -125,47 +146,59 @@ public class EmailMessageRepository : IEmailMessageRepository
 
     public async Task<Domain.Models.EmailStatistics> GetStatisticsAsync(
         Guid userId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        var emails = await _context.EmailMessages
-            .Where(e => e.UserId == userId)
+        var emails = await _context
+            .EmailMessages.Where(e => e.UserId == userId)
             .ToListAsync(cancellationToken);
 
         return new Domain.Models.EmailStatistics
         {
             TotalEmails = emails.Count,
-            Pending = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Pending),
-            Classified = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified),
-            Extracted = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Extracted),
-            Failed = emails.Count(e => e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Failed),
+            Pending = emails.Count(e =>
+                e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Pending
+            ),
+            Classified = emails.Count(e =>
+                e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified
+            ),
+            Extracted = emails.Count(e =>
+                e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Extracted
+            ),
+            Failed = emails.Count(e =>
+                e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Failed
+            ),
             FinancialEmails = emails.Count(e => e.IsFinancial == true),
-            NonFinancialEmails = emails.Count(e => e.IsFinancial == false)
+            NonFinancialEmails = emails.Count(e => e.IsFinancial == false),
         };
     }
 
-    public async Task<int> CountByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<int> CountByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.EmailMessages
-            .Where(e => e.UserId == userId)
+        return await _context
+            .EmailMessages.Where(e => e.UserId == userId)
             .CountAsync(cancellationToken);
     }
 
     public async Task<List<Domain.Models.SyncHistoryItem>> GetSyncHistoryAsync(
         Guid userId,
         int limit,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        // Group emails by the date they were created (synced) and count them
-        var syncHistory = await _context.EmailMessages
-            .Where(e => e.UserId == userId)
-            .GroupBy(e => e.CreatedAt.Date)
-            .Select(g => new Domain.Models.SyncHistoryItem
-            {
-                SyncedAt = g.Key,
-                EmailCount = g.Count()
-            })
-            .OrderByDescending(s => s.SyncedAt)
+        // Get sync history from the GmailSyncHistory table
+        var syncHistory = await _context
+            .GmailSyncHistories.Where(s => s.UserId == userId && s.SyncCompletedAt != null)
+            .OrderByDescending(s => s.SyncStartedAt)
             .Take(limit)
+            .Select(s => new Domain.Models.SyncHistoryItem
+            {
+                SyncedAt = s.SyncStartedAt,
+                EmailCount = s.EmailsProcessed,
+            })
             .ToListAsync(cancellationToken);
 
         return syncHistory;

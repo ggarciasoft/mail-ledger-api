@@ -6,14 +6,16 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.FinancialRecords.Queries;
 
-public class GetFinancialRecordsQueryHandler : IRequestHandler<GetFinancialRecordsQuery, PaginatedResponse<FinancialRecordListItemDto>>
+public class GetFinancialRecordsQueryHandler
+    : IRequestHandler<GetFinancialRecordsQuery, PaginatedResponse<FinancialRecordListItemDto>>
 {
     private readonly IFinancialRecordRepository _recordRepository;
     private readonly ILogger<GetFinancialRecordsQueryHandler> _logger;
 
     public GetFinancialRecordsQueryHandler(
         IFinancialRecordRepository recordRepository,
-        ILogger<GetFinancialRecordsQueryHandler> logger)
+        ILogger<GetFinancialRecordsQueryHandler> logger
+    )
     {
         _recordRepository = recordRepository;
         _logger = logger;
@@ -21,11 +23,15 @@ public class GetFinancialRecordsQueryHandler : IRequestHandler<GetFinancialRecor
 
     public async Task<PaginatedResponse<FinancialRecordListItemDto>> Handle(
         GetFinancialRecordsQuery request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Getting financial records for user {UserId}: Page={Page}, PageSize={PageSize}",
-            request.UserId, request.Page, request.PageSize);
+            request.UserId,
+            request.Page,
+            request.PageSize
+        );
 
         // Validate pagination
         var page = Math.Max(1, request.Page);
@@ -45,23 +51,39 @@ public class GetFinancialRecordsQueryHandler : IRequestHandler<GetFinancialRecor
             pageSize,
             request.SortBy,
             request.SortOrder,
-            cancellationToken);
+            cancellationToken
+        );
 
         // Map to DTOs
-        var items = records.Select(record => new FinancialRecordListItemDto
-        {
-            Id = record.Id,
-            Type = record.Type.ToString(),
-            Amount = record.Amount.Amount,
-            Currency = record.Amount.Currency.ToString(),
-            Merchant = record.Merchant,
-            TransactionDate = record.TransactionDate,
-            SourceAccount = record.SourceAccount?.Value,
-            SourceBank = record.SourceBank?.Name,
-            Direction = record.Direction.ToString(),
-            ConfirmedAt = record.ConfirmedAt ?? record.CreatedAt
-        }).ToList();
+        var items = records
+            .Select(record => new FinancialRecordListItemDto
+            {
+                Id = record.Id,
+                EmailId = record.EmailMessageId,
+                Type = record.Type.ToString(),
+                Amount = record.Amount.Amount,
+                Currency = record.Amount.Currency.ToString(),
+                Direction = record.Direction.ToString(),
+                Merchant = record.Merchant,
+                SourceAccount = record.SourceAccount?.Value,
+                SourceBank = record.SourceBank?.Name,
+                TargetAccount = record.TargetAccount?.Value,
+                TargetBank = record.TargetBank?.Name,
+                TransactionDate = record.TransactionDate,
+                TaxAmount = record.TaxAmount?.Amount,
+                FeeAmount = record.FeeAmount?.Amount,
+                Confidence = record.Confidence.Value,
+                ExtractionVersion = record.ExtractionVersion,
+                CreatedAt = record.CreatedAt,
+                ConfirmedAt = record.ConfirmedAt ?? record.CreatedAt,
+            })
+            .ToList();
 
-        return PaginatedResponse<FinancialRecordListItemDto>.Create(items, totalCount, page, pageSize);
+        return PaginatedResponse<FinancialRecordListItemDto>.Create(
+            items,
+            totalCount,
+            page,
+            pageSize
+        );
     }
 }

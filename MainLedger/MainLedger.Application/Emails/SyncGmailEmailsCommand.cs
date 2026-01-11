@@ -10,7 +10,7 @@ namespace MainLedger.Application.Emails.Commands;
 /// Command to sync emails from Gmail for a specific user.
 /// Fetches new emails and persists them to the database.
 /// </summary>
-public record SyncGmailEmailsCommand(Guid UserId) : IRequest<SyncResult>;
+public record SyncGmailEmailsCommand(Guid UserId, int MaxEmails = 50) : IRequest<SyncResult>;
 
 public record SyncResult
 {
@@ -27,6 +27,7 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
+    private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SyncGmailEmailsCommandHandler> _logger;
 
@@ -36,21 +37,30 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         IEmailMessageRepository emailRepository,
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
+        IGmailSyncHistoryRepository syncHistoryRepository,
         IUnitOfWork unitOfWork,
-        ILogger<SyncGmailEmailsCommandHandler> logger)
+        ILogger<SyncGmailEmailsCommandHandler> logger
+    )
     {
         _gmailService = gmailService;
         _connectionRepository = connectionRepository;
         _emailRepository = emailRepository;
         _ruleRepository = ruleRepository;
         _rulesEngine = rulesEngine;
+        _syncHistoryRepository = syncHistoryRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
-    public async Task<SyncResult> Handle(SyncGmailEmailsCommand request, CancellationToken cancellationToken)
+    public async Task<SyncResult> Handle(
+        SyncGmailEmailsCommand request,
+        CancellationToken cancellationToken
+    )
     {
-        var connection = await _connectionRepository.GetActiveByUserIdAsync(request.UserId, cancellationToken);
+        var connection = await _connectionRepository.GetActiveByUserIdAsync(
+            request.UserId,
+            cancellationToken
+        );
         if (connection == null)
         {
             return new SyncResult { Status = "No active Gmail connection found." };
@@ -59,9 +69,20 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         // Load user's active rules for filtering
         var rules = await _ruleRepository.GetActiveByUserIdAsync(request.UserId, cancellationToken);
 
+        // Create sync history record
+        var syncHistory = Domain.Entities.GmailSyncHistory.Create(
+            request.UserId,
+            connection.HistoryId
+        );
+        await _syncHistoryRepository.AddAsync(syncHistory, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
         _logger.LogInformation(
-            "Starting email sync for user {UserId} with {RuleCount} active rules",
-            request.UserId, rules.Count);
+            "Starting email sync for user {UserId} with {RuleCount} active rules. Sync ID: {SyncId}",
+            request.UserId,
+            rules.Count,
+            syncHistory.Id
+        );
 
         // Fetch emails with rule-based filtering (pre-filter at Gmail API level)
         var fetchedEmails = await _gmailService.FetchEmailsAsync(
@@ -69,8 +90,9 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
             rules.Any() ? rules : null, // Pass rules if any exist
             connection.LastSyncedAt, // Fetch since last sync
             null, // No historyId support yet in this basic implementation
-            50, 
-            cancellationToken);
+            request.MaxEmails,
+            cancellationToken
+        );
 
         int savedCount = 0;
         int ignoredCount = 0;
@@ -78,26 +100,38 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         foreach (var email in fetchedEmails)
         {
             // Deduplicate by ContentHash
-            if (await _emailRepository.ExistsByContentHashAsync(email.ContentHash, cancellationToken))
+            if (
+                await _emailRepository.ExistsByContentHashAsync(
+                    email.ContentHash,
+                    cancellationToken
+                )
+            )
             {
                 continue;
             }
 
             // Check if MessageId exists (double check)
-            if (await _emailRepository.GetByMessageIdAsync(email.MessageId, cancellationToken) != null)
+            if (
+                await _emailRepository.GetByMessageIdAsync(email.MessageId, cancellationToken)
+                != null
+            )
             {
                 continue;
             }
 
             // Run through Rules Engine to determine what to do with this email
             var evaluation = await _rulesEngine.EvaluateAsync(email, rules, cancellationToken);
-            
+
             // Set the directive on the email for auditing
             email.SetDirective(evaluation);
 
             _logger.LogInformation(
                 "Email {MessageId} from {Sender}: {Directive} - {Reason}",
-                email.MessageId, email.From.Value, evaluation.Directive, evaluation.Reason);
+                email.MessageId,
+                email.From.Value,
+                evaluation.Directive,
+                evaluation.Reason
+            );
 
             // Only save emails that should be processed
             if (evaluation.ShouldProcess)
@@ -106,15 +140,21 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
                 // AI classification and extraction will happen in batch jobs
                 await _emailRepository.AddAsync(email, cancellationToken);
                 savedCount++;
-                
+
                 _logger.LogInformation(
                     "Email {MessageId} saved with status {Status} for batch processing",
-                    email.MessageId, email.ProcessingStatus);
+                    email.MessageId,
+                    email.ProcessingStatus
+                );
             }
             else
             {
                 ignoredCount++;
-                _logger.LogDebug("Email {MessageId} ignored: {Reason}", email.MessageId, evaluation.Reason);
+                _logger.LogDebug(
+                    "Email {MessageId} ignored: {Reason}",
+                    email.MessageId,
+                    evaluation.Reason
+                );
             }
         }
 
@@ -129,16 +169,31 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "Sync completed for user {UserId}: {Fetched} fetched, {Saved} saved, {Ignored} ignored",
-            request.UserId, fetchedEmails.Count, savedCount, ignoredCount);
+        // Complete sync history record
+        syncHistory.Complete(
+            emailsFound: fetchedEmails.Count,
+            emailsProcessed: savedCount,
+            isSuccess: true,
+            errorMessage: null
+        );
+        await _syncHistoryRepository.UpdateAsync(syncHistory, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new SyncResult 
-        { 
-            EmailsFetched = fetchedEmails.Count, 
+        _logger.LogInformation(
+            "Sync completed for user {UserId}: {Fetched} fetched, {Saved} saved, {Ignored} ignored. Sync ID: {SyncId}",
+            request.UserId,
+            fetchedEmails.Count,
+            savedCount,
+            ignoredCount,
+            syncHistory.Id
+        );
+
+        return new SyncResult
+        {
+            EmailsFetched = fetchedEmails.Count,
             EmailsSaved = savedCount,
             EmailsIgnored = ignoredCount,
-            Status = "Success" 
+            Status = "Success",
         };
     }
 }

@@ -88,10 +88,20 @@ public class GetExtractionCandidatesQueryHandler
                 Merchant = candidate.Merchant,
                 TransactionDate = candidate.TransactionDate,
                 SourceAccount = candidate.SourceAccount?.Value,
+                TargetAccount = candidate.TargetAccount?.Value,
                 SourceBank = candidate.SourceBank?.Name,
-                Status = candidate.Status.ToString(),
+                TargetBank = candidate.TargetBank?.Name,
+                Fees = candidate.Fees?.Amount,
+                Tax = candidate.Tax?.Amount,
+                ReferenceId = candidate.ReferenceId,
                 Confidence = CalculateOverallConfidence(candidate),
+                AmountConfidence = candidate.AmountConfidence?.Value,
+                DateConfidence = candidate.DateConfidence?.Value,
+                MerchantConfidence = candidate.MerchantConfidence?.Value,
+                Status = candidate.Status.ToString(),
                 CreatedAt = candidate.CreatedAt,
+                ConfirmedAt = candidate.ConfirmedAt,
+                RejectionReason = candidate.RejectionReason,
             })
             .ToList();
 
