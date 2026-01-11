@@ -27,6 +27,7 @@ public class MailLedgerDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ProcessingJob> ProcessingJobs => Set<ProcessingJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

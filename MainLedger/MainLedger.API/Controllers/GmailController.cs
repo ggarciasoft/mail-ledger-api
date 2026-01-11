@@ -17,18 +17,24 @@ public class GmailController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<GmailController> _logger;
+    private readonly IProcessingJobRepository _processingJobRepository;
+    private readonly IUnitOfWork _unitOfWork;
 
     public GmailController(
         IGmailService gmailService,
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<GmailController> logger
+        ILogger<GmailController> logger,
+        IProcessingJobRepository processingJobRepository,
+        IUnitOfWork unitOfWork
     )
     {
         _gmailService = gmailService;
         _mediator = mediator;
         _currentUserService = currentUserService;
         _logger = logger;
+        _processingJobRepository = processingJobRepository;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -112,10 +118,31 @@ public class GmailController : ControllerBase
 
         try
         {
-            var command = new SyncGmailEmailsCommand(userId.Value, maxEmails);
-            var result = await _mediator.Send(command, cancellationToken);
+            // Create processing job
+            var job = Domain.Entities.ProcessingJob.Create(
+                userId.Value,
+                Domain.Enums.JobType.EmailSync,
+                string.Empty, // Will be updated with Hangfire job ID
+                System.Text.Json.JsonSerializer.Serialize(new { maxEmails })
+            );
 
-            return Ok(result);
+            await _processingJobRepository.AddAsync(job, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Enqueue Hangfire background job
+            var hangfireJobId =
+                Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.EmailSyncBackgroundJob>(
+                    x => x.ExecuteAsync(job.Id, userId.Value, maxEmails, CancellationToken.None)
+                );
+
+            _logger.LogInformation(
+                "Enqueued email sync job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",
+                job.Id,
+                hangfireJobId,
+                userId
+            );
+
+            return Ok(new { jobId = job.Id, message = "Email sync job enqueued successfully" });
         }
         catch (Exception ex)
         {

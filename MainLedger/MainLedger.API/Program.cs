@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.PostgreSql;
 using MainLedger.Domain.Repositories;
 using MainLedger.Infrastructure.Persistence;
 using MainLedger.Infrastructure.Persistence.Repositories;
@@ -62,6 +64,24 @@ namespace MainLedger.API
                 )
             );
 
+            // Configure Hangfire with PostgreSQL storage
+            builder.Services.AddHangfire(configuration =>
+                configuration
+                    .SetDataCompatibilityLevel(Hangfire.CompatibilityLevel.Version_180)
+                    .UseSimpleAssemblyNameTypeSerializer()
+                    .UseRecommendedSerializerSettings()
+                    .UsePostgreSqlStorage(options =>
+                    {
+                        options.UseNpgsqlConnection(connectionString);
+                    })
+            );
+
+            // Add Hangfire server
+            builder.Services.AddHangfireServer(options =>
+            {
+                options.WorkerCount = 5; // Number of concurrent jobs
+            });
+
             // Register repositories
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<IGmailConnectionRepository, GmailConnectionRepository>();
@@ -85,6 +105,7 @@ namespace MainLedger.API
                 PasswordResetTokenRepository
             >();
             builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+            builder.Services.AddScoped<IProcessingJobRepository, ProcessingJobRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register HTTP Context Accessor (required for CurrentUserService)
@@ -146,6 +167,11 @@ namespace MainLedger.API
                 MainLedger.Application.Common.Interfaces.INormalizationService,
                 MainLedger.Application.Services.NormalizationService
             >();
+
+            // Register Background Jobs
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.EmailSyncBackgroundJob>();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ClassificationBackgroundJob>();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ExtractionBackgroundJob>();
 
             // Register Gmail Integration
             builder.Services.Configure<MainLedger.Domain.Settings.GmailSettings>(
@@ -271,6 +297,15 @@ namespace MainLedger.API
                 Infrastructure.Persistence.Seed.DatabaseSeeder.SeedAsync(context).Wait();
                 app.UseSwagger();
                 app.UseSwaggerUI();
+
+                // Hangfire Dashboard
+                app.UseHangfireDashboard(
+                    "/hangfire",
+                    new Hangfire.DashboardOptions
+                    {
+                        Authorization = new[] { new HangfireAuthorizationFilter() },
+                    }
+                );
             }
 
             app.UseHttpsRedirection();

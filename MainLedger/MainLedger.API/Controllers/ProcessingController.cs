@@ -19,15 +19,22 @@ public class ProcessingController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProcessingController> _logger;
+    private readonly Domain.Repositories.IProcessingJobRepository _processingJobRepository;
+    private readonly Domain.Repositories.IUnitOfWork _unitOfWork;
 
     public ProcessingController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<ProcessingController> logger)
+        ILogger<ProcessingController> logger,
+        Domain.Repositories.IProcessingJobRepository processingJobRepository,
+        Domain.Repositories.IUnitOfWork unitOfWork
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
         _logger = logger;
+        _processingJobRepository = processingJobRepository;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -35,7 +42,8 @@ public class ProcessingController : ControllerBase
     /// </summary>
     [HttpGet("status")]
     public async Task<ActionResult<ProcessingStatusDto>> GetStatus(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -63,7 +71,8 @@ public class ProcessingController : ControllerBase
     [HttpPost("classify")]
     public async Task<ActionResult<TriggerJobResponseDto>> TriggerClassification(
         [FromQuery] int batchSize = 20,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -74,9 +83,31 @@ public class ProcessingController : ControllerBase
 
         try
         {
-            var command = new TriggerClassificationCommand(userId.Value, batchSize);
-            var result = await _mediator.Send(command, cancellationToken);
-            return Ok(result);
+            // Create processing job
+            var job = Domain.Entities.ProcessingJob.Create(
+                userId.Value,
+                Domain.Enums.JobType.Classification,
+                string.Empty,
+                System.Text.Json.JsonSerializer.Serialize(new { batchSize })
+            );
+
+            await _processingJobRepository.AddAsync(job, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Enqueue Hangfire background job
+            var hangfireJobId =
+                Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.ClassificationBackgroundJob>(
+                    x => x.ExecuteAsync(job.Id, userId.Value, batchSize, CancellationToken.None)
+                );
+
+            _logger.LogInformation(
+                "Enqueued classification job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",
+                job.Id,
+                hangfireJobId,
+                userId
+            );
+
+            return Ok(new { jobId = job.Id, message = "Classification job enqueued successfully" });
         }
         catch (Exception ex)
         {
@@ -91,7 +122,8 @@ public class ProcessingController : ControllerBase
     [HttpPost("extract")]
     public async Task<ActionResult<TriggerJobResponseDto>> TriggerExtraction(
         [FromQuery] int batchSize = 20,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -102,9 +134,31 @@ public class ProcessingController : ControllerBase
 
         try
         {
-            var command = new TriggerExtractionCommand(userId.Value, batchSize);
-            var result = await _mediator.Send(command, cancellationToken);
-            return Ok(result);
+            // Create processing job
+            var job = Domain.Entities.ProcessingJob.Create(
+                userId.Value,
+                Domain.Enums.JobType.Extraction,
+                string.Empty,
+                System.Text.Json.JsonSerializer.Serialize(new { batchSize })
+            );
+
+            await _processingJobRepository.AddAsync(job, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Enqueue Hangfire background job
+            var hangfireJobId =
+                Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.ExtractionBackgroundJob>(
+                    x => x.ExecuteAsync(job.Id, userId.Value, batchSize, CancellationToken.None)
+                );
+
+            _logger.LogInformation(
+                "Enqueued extraction job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",
+                job.Id,
+                hangfireJobId,
+                userId
+            );
+
+            return Ok(new { jobId = job.Id, message = "Extraction job enqueued successfully" });
         }
         catch (Exception ex)
         {

@@ -1,0 +1,255 @@
+using Hangfire;
+using MainLedger.Application.Common.Interfaces;
+using MainLedger.Domain.Entities;
+using MainLedger.Domain.Enums;
+using MainLedger.Domain.Repositories;
+using Microsoft.Extensions.Logging;
+
+namespace MainLedger.Application.BackgroundJobs;
+
+/// <summary>
+/// Background job for extracting financial data from emails.
+/// </summary>
+public class ExtractionBackgroundJob
+{
+    private readonly IEmailMessageRepository _emailRepository;
+    private readonly IExtractionService _extractionService;
+    private readonly INormalizationService _normalizationService;
+    private readonly IExtractionCandidateRepository _candidateRepository;
+    private readonly IProcessingJobRepository _jobRepository;
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ILogger<ExtractionBackgroundJob> _logger;
+
+    public ExtractionBackgroundJob(
+        IEmailMessageRepository emailRepository,
+        IExtractionService extractionService,
+        INormalizationService normalizationService,
+        IExtractionCandidateRepository candidateRepository,
+        IProcessingJobRepository jobRepository,
+        IUnitOfWork unitOfWork,
+        ILogger<ExtractionBackgroundJob> logger
+    )
+    {
+        _emailRepository = emailRepository;
+        _extractionService = extractionService;
+        _normalizationService = normalizationService;
+        _candidateRepository = candidateRepository;
+        _jobRepository = jobRepository;
+        _unitOfWork = unitOfWork;
+        _logger = logger;
+    }
+
+    [AutomaticRetry(Attempts = 3)]
+    public async Task ExecuteAsync(
+        Guid jobId,
+        Guid userId,
+        int batchSize,
+        CancellationToken cancellationToken
+    )
+    {
+        var job = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+        if (job == null)
+        {
+            _logger.LogError("Job {JobId} not found", jobId);
+            return;
+        }
+
+        try
+        {
+            _logger.LogInformation(
+                "Starting extraction job {JobId} for user {UserId}",
+                jobId,
+                userId
+            );
+
+            // Get classified financial emails
+            var emails = await _emailRepository.GetPendingExtractionAsync(
+                userId,
+                batchSize,
+                cancellationToken
+            );
+
+            job.Start(emails.Count);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            int successCount = 0;
+            int failureCount = 0;
+            int processedCount = 0;
+
+            foreach (var email in emails)
+            {
+                try
+                {
+                    // Extract financial data
+                    var extractionResult = await _extractionService.ExtractFinancialDataAsync(
+                        email,
+                        cancellationToken
+                    );
+
+                    // Normalize the extracted data
+                    var normalizationResult = await _normalizationService.NormalizeExtractionAsync(
+                        extractionResult,
+                        email,
+                        cancellationToken
+                    );
+
+                    // Skip if normalization failed
+                    if (!normalizationResult.IsValid)
+                    {
+                        _logger.LogWarning("Normalization failed for email {EmailId}", email.Id);
+                        failureCount++;
+                        continue;
+                    }
+
+                    // Create extraction candidate
+                    var candidate = ExtractionCandidate.Create(email.Id, Guid.NewGuid()); // TODO: Get actual version ID
+
+                    // Set transaction data
+                    Domain.ValueObjects.Money? amount = null;
+                    if (
+                        normalizationResult.NormalizedAmount.HasValue
+                        && !string.IsNullOrWhiteSpace(normalizationResult.NormalizedCurrency)
+                    )
+                    {
+                        if (
+                            Enum.TryParse<Domain.Enums.Currency>(
+                                normalizationResult.NormalizedCurrency,
+                                true,
+                                out var currency
+                            )
+                        )
+                        {
+                            amount = Domain.ValueObjects.Money.Create(
+                                normalizationResult.NormalizedAmount.Value,
+                                currency
+                            );
+                        }
+                    }
+
+                    candidate.SetTransactionData(
+                        amount,
+                        normalizationResult.NormalizedDate,
+                        normalizationResult.NormalizedMerchant,
+                        normalizationResult.AmountConfidence > 0
+                            ? Domain.ValueObjects.Confidence.Create(
+                                normalizationResult.AmountConfidence
+                            )
+                            : null,
+                        normalizationResult.DateConfidence > 0
+                            ? Domain.ValueObjects.Confidence.Create(
+                                normalizationResult.DateConfidence
+                            )
+                            : null,
+                        normalizationResult.MerchantConfidence > 0
+                            ? Domain.ValueObjects.Confidence.Create(
+                                normalizationResult.MerchantConfidence
+                            )
+                            : null
+                    );
+
+                    // Set account info
+                    Domain.ValueObjects.AccountNumber? sourceAccount = null;
+                    Domain.ValueObjects.AccountNumber? targetAccount = null;
+
+                    if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedSourceAccount))
+                    {
+                        sourceAccount = Domain.ValueObjects.AccountNumber.Create(
+                            normalizationResult.NormalizedSourceAccount
+                        );
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedTargetAccount))
+                    {
+                        targetAccount = Domain.ValueObjects.AccountNumber.Create(
+                            normalizationResult.NormalizedTargetAccount
+                        );
+                    }
+
+                    Domain.ValueObjects.BankProvider? sourceBank = null;
+                    Domain.ValueObjects.BankProvider? targetBank = null;
+
+                    if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedSourceBank))
+                    {
+                        sourceBank = Domain.ValueObjects.BankProvider.Create(
+                            normalizationResult.NormalizedSourceBank,
+                            normalizationResult.NormalizedSourceBank
+                        );
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedTargetBank))
+                    {
+                        targetBank = Domain.ValueObjects.BankProvider.Create(
+                            normalizationResult.NormalizedTargetBank,
+                            normalizationResult.NormalizedTargetBank
+                        );
+                    }
+
+                    candidate.SetAccountInfo(sourceAccount, targetAccount, sourceBank, targetBank);
+
+                    // Set additional details
+                    Domain.ValueObjects.Money? fees = null;
+                    Domain.ValueObjects.Money? tax = null;
+
+                    if (normalizationResult.NormalizedFees.HasValue && amount != null)
+                    {
+                        fees = Domain.ValueObjects.Money.Create(
+                            normalizationResult.NormalizedFees.Value,
+                            amount.Currency
+                        );
+                    }
+
+                    if (normalizationResult.NormalizedTax.HasValue && amount != null)
+                    {
+                        tax = Domain.ValueObjects.Money.Create(
+                            normalizationResult.NormalizedTax.Value,
+                            amount.Currency
+                        );
+                    }
+
+                    candidate.SetAdditionalDetails(fees, tax, normalizationResult.ReferenceId);
+
+                    await _candidateRepository.AddAsync(candidate, cancellationToken);
+
+                    // Mark email as extracted
+                    email.MarkAsProcessed();
+                    _emailRepository.Update(email);
+
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error extracting data from email {EmailId}", email.Id);
+                    failureCount++;
+                }
+
+                processedCount++;
+
+                // Update progress every 5 emails
+                if (processedCount % 5 == 0)
+                {
+                    job.UpdateProgress(processedCount, successCount, failureCount);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            // Final update
+            job.UpdateProgress(processedCount, successCount, failureCount);
+            job.Complete();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Extraction job {JobId} completed: {Success} success, {Failure} failures",
+                jobId,
+                successCount,
+                failureCount
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Extraction job {JobId} failed", jobId);
+            job.Fail(ex.Message);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            throw;
+        }
+    }
+}

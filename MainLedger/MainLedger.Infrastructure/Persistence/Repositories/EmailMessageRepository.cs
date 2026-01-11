@@ -91,6 +91,40 @@ public class EmailMessageRepository : IEmailMessageRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<EmailMessage>> GetPendingClassificationAsync(
+        Guid userId,
+        int limit,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context
+            .EmailMessages.Where(e =>
+                e.UserId == userId
+                && e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Pending
+                && e.IsFinancial == null
+            )
+            .OrderBy(e => e.CreatedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<EmailMessage>> GetPendingExtractionAsync(
+        Guid userId,
+        int limit,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context
+            .EmailMessages.Where(e =>
+                e.UserId == userId
+                && e.ProcessingStatus == Domain.Enums.EmailProcessingStatus.Classified
+                && e.IsFinancial == true
+            )
+            .OrderBy(e => e.CreatedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<(List<EmailMessage> Emails, int TotalCount)> GetPagedAsync(
         Guid userId,
         Domain.Enums.EmailProcessingStatus? status,
