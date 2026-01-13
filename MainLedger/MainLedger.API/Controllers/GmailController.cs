@@ -118,6 +118,27 @@ public class GmailController : ControllerBase
 
         try
         {
+            // Check if an email sync job is already running for this user
+            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+                userId.Value,
+                Domain.Enums.JobType.EmailSync,
+                cancellationToken
+            );
+
+            if (hasActiveJob)
+            {
+                _logger.LogWarning(
+                    "Email sync job already running for user {UserId}",
+                    userId.Value
+                );
+                return Conflict(
+                    new
+                    {
+                        error = "An email sync job is already running. Please wait for it to complete.",
+                    }
+                );
+            }
+
             // Create processing job
             var job = Domain.Entities.ProcessingJob.Create(
                 userId.Value,

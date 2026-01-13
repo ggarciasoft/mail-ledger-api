@@ -83,6 +83,27 @@ public class ProcessingController : ControllerBase
 
         try
         {
+            // Check if a classification job is already running for this user
+            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+                userId.Value,
+                Domain.Enums.JobType.Classification,
+                cancellationToken
+            );
+
+            if (hasActiveJob)
+            {
+                _logger.LogWarning(
+                    "Classification job already running for user {UserId}",
+                    userId.Value
+                );
+                return Conflict(
+                    new
+                    {
+                        error = "A classification job is already running. Please wait for it to complete.",
+                    }
+                );
+            }
+
             // Create processing job
             var job = Domain.Entities.ProcessingJob.Create(
                 userId.Value,
@@ -134,6 +155,27 @@ public class ProcessingController : ControllerBase
 
         try
         {
+            // Check if an extraction job is already running for this user
+            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+                userId.Value,
+                Domain.Enums.JobType.Extraction,
+                cancellationToken
+            );
+
+            if (hasActiveJob)
+            {
+                _logger.LogWarning(
+                    "Extraction job already running for user {UserId}",
+                    userId.Value
+                );
+                return Conflict(
+                    new
+                    {
+                        error = "An extraction job is already running. Please wait for it to complete.",
+                    }
+                );
+            }
+
             // Create processing job
             var job = Domain.Entities.ProcessingJob.Create(
                 userId.Value,

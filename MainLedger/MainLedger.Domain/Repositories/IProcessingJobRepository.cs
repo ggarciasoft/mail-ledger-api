@@ -23,6 +23,11 @@ public interface IProcessingJobRepository
         int limit = 10,
         CancellationToken cancellationToken = default
     );
+    Task<bool> HasActiveJobOfTypeAsync(
+        Guid userId,
+        JobType jobType,
+        CancellationToken cancellationToken = default
+    );
     Task AddAsync(ProcessingJob job, CancellationToken cancellationToken = default);
     void Update(ProcessingJob job);
 }

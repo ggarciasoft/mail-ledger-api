@@ -103,6 +103,7 @@ public class ClassificationBackgroundJob
                 {
                     job.UpdateProgress(processedCount, successCount, failureCount);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    await _jobNotificationService.NotifyJobUpdated(userId, job);
                 }
             }
 

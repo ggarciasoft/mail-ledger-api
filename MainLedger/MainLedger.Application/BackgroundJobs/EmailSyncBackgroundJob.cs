@@ -149,6 +149,7 @@ public class EmailSyncBackgroundJob
                     {
                         job.UpdateProgress(processedCount, savedCount, ignoredCount);
                         await _unitOfWork.SaveChangesAsync(cancellationToken);
+                        await _jobNotificationService.NotifyJobUpdated(userId, job);
                     }
                 }
                 catch (Exception ex)

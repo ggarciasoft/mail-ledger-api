@@ -67,6 +67,21 @@ public class ProcessingJobRepository : IProcessingJobRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> HasActiveJobOfTypeAsync(
+        Guid userId,
+        JobType jobType,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.ProcessingJobs.AnyAsync(
+            j =>
+                j.UserId == userId
+                && j.JobType == jobType
+                && (j.Status == JobStatus.Pending || j.Status == JobStatus.Running),
+            cancellationToken
+        );
+    }
+
     public async Task AddAsync(ProcessingJob job, CancellationToken cancellationToken = default)
     {
         await _context.ProcessingJobs.AddAsync(job, cancellationToken);
