@@ -115,6 +115,38 @@ public class ProcessingController : ControllerBase
             await _processingJobRepository.AddAsync(job, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Double-check after save to catch race condition
+            // If two requests passed the first check simultaneously, one will succeed and one will fail here
+            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
+                userId.Value,
+                Domain.Enums.JobType.Classification,
+                cancellationToken
+            );
+
+            // If there's more than one active job, we have a race condition
+            // Delete the one we just created and return conflict
+            if (activeJobsAfterSave.Count > 1)
+            {
+                _logger.LogWarning(
+                    "Race condition detected: Multiple classification jobs created for user {UserId}. Deleting duplicate.",
+                    userId.Value
+                );
+
+                // The job we just created might not be the first one, so we keep the oldest
+                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
+
+                if (jobToDelete.Id == job.Id)
+                {
+                    // Our job is the duplicate, don't enqueue it
+                    return Conflict(
+                        new
+                        {
+                            error = "A classification job is already running. Please wait for it to complete.",
+                        }
+                    );
+                }
+            }
+
             // Enqueue Hangfire background job
             var hangfireJobId =
                 Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.ClassificationBackgroundJob>(
@@ -186,6 +218,33 @@ public class ProcessingController : ControllerBase
 
             await _processingJobRepository.AddAsync(job, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Double-check after save to catch race condition
+            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
+                userId.Value,
+                Domain.Enums.JobType.Extraction,
+                cancellationToken
+            );
+
+            if (activeJobsAfterSave.Count > 1)
+            {
+                _logger.LogWarning(
+                    "Race condition detected: Multiple extraction jobs created for user {UserId}. Deleting duplicate.",
+                    userId.Value
+                );
+
+                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
+
+                if (jobToDelete.Id == job.Id)
+                {
+                    return Conflict(
+                        new
+                        {
+                            error = "An extraction job is already running. Please wait for it to complete.",
+                        }
+                    );
+                }
+            }
 
             // Enqueue Hangfire background job
             var hangfireJobId =

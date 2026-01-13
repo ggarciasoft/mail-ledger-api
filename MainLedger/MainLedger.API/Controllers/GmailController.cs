@@ -150,6 +150,33 @@ public class GmailController : ControllerBase
             await _processingJobRepository.AddAsync(job, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Double-check after save to catch race condition
+            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
+                userId.Value,
+                Domain.Enums.JobType.EmailSync,
+                cancellationToken
+            );
+
+            if (activeJobsAfterSave.Count > 1)
+            {
+                _logger.LogWarning(
+                    "Race condition detected: Multiple email sync jobs created for user {UserId}. Deleting duplicate.",
+                    userId.Value
+                );
+
+                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
+
+                if (jobToDelete.Id == job.Id)
+                {
+                    return Conflict(
+                        new
+                        {
+                            error = "An email sync job is already running. Please wait for it to complete.",
+                        }
+                    );
+                }
+            }
+
             // Enqueue Hangfire background job
             var hangfireJobId =
                 Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.EmailSyncBackgroundJob>(
