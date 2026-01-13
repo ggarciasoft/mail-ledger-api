@@ -169,6 +169,12 @@ namespace MainLedger.API
                 MainLedger.Application.Services.NormalizationService
             >();
 
+            // Register Job Management Service
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IJobManagementService,
+                MainLedger.Application.Services.JobManagementService
+            >();
+
             // Register Background Jobs
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.EmailSyncBackgroundJob>();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ClassificationBackgroundJob>();

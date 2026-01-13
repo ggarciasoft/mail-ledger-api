@@ -19,26 +19,23 @@ public class ProcessingController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProcessingController> _logger;
-    private readonly Domain.Repositories.IProcessingJobRepository _processingJobRepository;
-    private readonly Domain.Repositories.IUnitOfWork _unitOfWork;
+    private readonly MainLedger.Application.Common.Interfaces.IJobManagementService _jobManagementService;
 
     public ProcessingController(
         IMediator mediator,
         ICurrentUserService currentUserService,
         ILogger<ProcessingController> logger,
-        Domain.Repositories.IProcessingJobRepository processingJobRepository,
-        Domain.Repositories.IUnitOfWork unitOfWork
+        MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService
     )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
         _logger = logger;
-        _processingJobRepository = processingJobRepository;
-        _unitOfWork = unitOfWork;
+        _jobManagementService = jobManagementService;
     }
 
     /// <summary>
-    /// Get processing status for a user.
+    /// Get processing status for the current user.
     /// </summary>
     [HttpGet("status")]
     public async Task<ActionResult<ProcessingStatusDto>> GetStatus(
@@ -52,17 +49,10 @@ public class ProcessingController : ControllerBase
             return Unauthorized(new { error = "User not authenticated" });
         }
 
-        try
-        {
-            var query = new GetProcessingStatusQuery(userId.Value);
-            var result = await _mediator.Send(query, cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting processing status for user {UserId}", userId);
-            return BadRequest(new { error = ex.Message });
-        }
+        var query = new GetProcessingStatusQuery(userId.Value);
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return Ok(result);
     }
 
     /// <summary>
@@ -83,68 +73,22 @@ public class ProcessingController : ControllerBase
 
         try
         {
-            // Check if a classification job is already running for this user
-            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+            // Create job using service (handles validation and race condition protection)
+            var job = await _jobManagementService.CreateJobAsync(
                 userId.Value,
                 Domain.Enums.JobType.Classification,
+                System.Text.Json.JsonSerializer.Serialize(new { batchSize }),
                 cancellationToken
             );
 
-            if (hasActiveJob)
+            if (job == null)
             {
-                _logger.LogWarning(
-                    "Classification job already running for user {UserId}",
-                    userId.Value
-                );
                 return Conflict(
                     new
                     {
                         error = "A classification job is already running. Please wait for it to complete.",
                     }
                 );
-            }
-
-            // Create processing job
-            var job = Domain.Entities.ProcessingJob.Create(
-                userId.Value,
-                Domain.Enums.JobType.Classification,
-                string.Empty,
-                System.Text.Json.JsonSerializer.Serialize(new { batchSize })
-            );
-
-            await _processingJobRepository.AddAsync(job, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Double-check after save to catch race condition
-            // If two requests passed the first check simultaneously, one will succeed and one will fail here
-            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
-                userId.Value,
-                Domain.Enums.JobType.Classification,
-                cancellationToken
-            );
-
-            // If there's more than one active job, we have a race condition
-            // Delete the one we just created and return conflict
-            if (activeJobsAfterSave.Count > 1)
-            {
-                _logger.LogWarning(
-                    "Race condition detected: Multiple classification jobs created for user {UserId}. Deleting duplicate.",
-                    userId.Value
-                );
-
-                // The job we just created might not be the first one, so we keep the oldest
-                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
-
-                if (jobToDelete.Id == job.Id)
-                {
-                    // Our job is the duplicate, don't enqueue it
-                    return Conflict(
-                        new
-                        {
-                            error = "A classification job is already running. Please wait for it to complete.",
-                        }
-                    );
-                }
             }
 
             // Enqueue Hangfire background job
@@ -187,63 +131,22 @@ public class ProcessingController : ControllerBase
 
         try
         {
-            // Check if an extraction job is already running for this user
-            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+            // Create job using service (handles validation and race condition protection)
+            var job = await _jobManagementService.CreateJobAsync(
                 userId.Value,
                 Domain.Enums.JobType.Extraction,
+                System.Text.Json.JsonSerializer.Serialize(new { batchSize }),
                 cancellationToken
             );
 
-            if (hasActiveJob)
+            if (job == null)
             {
-                _logger.LogWarning(
-                    "Extraction job already running for user {UserId}",
-                    userId.Value
-                );
                 return Conflict(
                     new
                     {
                         error = "An extraction job is already running. Please wait for it to complete.",
                     }
                 );
-            }
-
-            // Create processing job
-            var job = Domain.Entities.ProcessingJob.Create(
-                userId.Value,
-                Domain.Enums.JobType.Extraction,
-                string.Empty,
-                System.Text.Json.JsonSerializer.Serialize(new { batchSize })
-            );
-
-            await _processingJobRepository.AddAsync(job, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Double-check after save to catch race condition
-            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
-                userId.Value,
-                Domain.Enums.JobType.Extraction,
-                cancellationToken
-            );
-
-            if (activeJobsAfterSave.Count > 1)
-            {
-                _logger.LogWarning(
-                    "Race condition detected: Multiple extraction jobs created for user {UserId}. Deleting duplicate.",
-                    userId.Value
-                );
-
-                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
-
-                if (jobToDelete.Id == job.Id)
-                {
-                    return Conflict(
-                        new
-                        {
-                            error = "An extraction job is already running. Please wait for it to complete.",
-                        }
-                    );
-                }
             }
 
             // Enqueue Hangfire background job

@@ -1,7 +1,6 @@
 using MainLedger.Application.Authentication.Services;
 using MainLedger.Application.Common.Interfaces;
 using MainLedger.Application.Emails.Commands;
-using MainLedger.Domain.Repositories;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,24 +16,21 @@ public class GmailController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<GmailController> _logger;
-    private readonly IProcessingJobRepository _processingJobRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly MainLedger.Application.Common.Interfaces.IJobManagementService _jobManagementService;
 
     public GmailController(
         IGmailService gmailService,
         IMediator mediator,
         ICurrentUserService currentUserService,
         ILogger<GmailController> logger,
-        IProcessingJobRepository processingJobRepository,
-        IUnitOfWork unitOfWork
+        MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService
     )
     {
         _gmailService = gmailService;
         _mediator = mediator;
         _currentUserService = currentUserService;
         _logger = logger;
-        _processingJobRepository = processingJobRepository;
-        _unitOfWork = unitOfWork;
+        _jobManagementService = jobManagementService;
     }
 
     /// <summary>
@@ -118,63 +114,22 @@ public class GmailController : ControllerBase
 
         try
         {
-            // Check if an email sync job is already running for this user
-            var hasActiveJob = await _processingJobRepository.HasActiveJobOfTypeAsync(
+            // Create job using service (handles validation and race condition protection)
+            var job = await _jobManagementService.CreateJobAsync(
                 userId.Value,
                 Domain.Enums.JobType.EmailSync,
+                System.Text.Json.JsonSerializer.Serialize(new { maxEmails }),
                 cancellationToken
             );
 
-            if (hasActiveJob)
+            if (job == null)
             {
-                _logger.LogWarning(
-                    "Email sync job already running for user {UserId}",
-                    userId.Value
-                );
                 return Conflict(
                     new
                     {
-                        error = "An email sync job is already running. Please wait for it to complete.",
+                        error = "An email sync job is already running. Please wait for it to complete."
                     }
                 );
-            }
-
-            // Create processing job
-            var job = Domain.Entities.ProcessingJob.Create(
-                userId.Value,
-                Domain.Enums.JobType.EmailSync,
-                string.Empty, // Will be updated with Hangfire job ID
-                System.Text.Json.JsonSerializer.Serialize(new { maxEmails })
-            );
-
-            await _processingJobRepository.AddAsync(job, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Double-check after save to catch race condition
-            var activeJobsAfterSave = await _processingJobRepository.GetActiveJobsForUserAsync(
-                userId.Value,
-                Domain.Enums.JobType.EmailSync,
-                cancellationToken
-            );
-
-            if (activeJobsAfterSave.Count > 1)
-            {
-                _logger.LogWarning(
-                    "Race condition detected: Multiple email sync jobs created for user {UserId}. Deleting duplicate.",
-                    userId.Value
-                );
-
-                var jobToDelete = activeJobsAfterSave.OrderByDescending(j => j.CreatedAt).First();
-
-                if (jobToDelete.Id == job.Id)
-                {
-                    return Conflict(
-                        new
-                        {
-                            error = "An email sync job is already running. Please wait for it to complete.",
-                        }
-                    );
-                }
             }
 
             // Enqueue Hangfire background job
