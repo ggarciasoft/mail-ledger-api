@@ -9,6 +9,7 @@ namespace MainLedger.Application.BackgroundJobs;
 /// <summary>
 /// Recurring job for sequential pipeline mode.
 /// Runs email sync, classification, and extraction in sequence.
+/// Uses Hangfire's job state monitoring for proper sequencing.
 /// </summary>
 public class SequentialPipelineJob
 {
@@ -19,17 +20,20 @@ public class SequentialPipelineJob
 
     public SequentialPipelineJob(
         IWorkflowConfigurationRepository configRepository,
-        IJobManagementService _jobManagementService,
+        IJobManagementService jobManagementService,
         IProcessingJobRepository jobRepository,
         ILogger<SequentialPipelineJob> logger
     )
     {
         _configRepository = configRepository;
-        this._jobManagementService = _jobManagementService;
+        _jobManagementService = jobManagementService;
         _jobRepository = jobRepository;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Entry point: Starts the pipeline with email sync.
+    /// </summary>
     public async Task ExecuteAsync(
         Guid userId,
         int syncBatchSize,
@@ -66,17 +70,22 @@ public class SequentialPipelineJob
             syncJob.SetHangfireJobId(syncHangfireId);
             await _jobManagementService.UpdateJobAsync(syncJob);
 
-            // Step 2: Classification (continues after sync completes)
-            var classifyHangfireId = BackgroundJob.ContinueJobWith<SequentialPipelineJob>(
+            // Schedule classification to run after sync completes
+            BackgroundJob.ContinueJobWith<SequentialPipelineJob>(
                 syncHangfireId,
-                x => x.TriggerClassificationAsync(userId, classifyBatchSize, extractBatchSize)
+                x =>
+                    x.RunClassificationStepAsync(
+                        userId,
+                        syncJob.Id,
+                        classifyBatchSize,
+                        extractBatchSize
+                    )
             );
 
             _logger.LogInformation(
-                "Enqueued sequential pipeline for user {UserId}: Sync={SyncJobId}, Classify={ClassifyJobId}",
+                "Started sequential pipeline for user {UserId}: EmailSync job {JobId}",
                 userId,
-                syncJob.Id,
-                classifyHangfireId
+                syncJob.Id
             );
         }
         else
@@ -89,19 +98,35 @@ public class SequentialPipelineJob
     }
 
     /// <summary>
-    /// Triggers classification step of the pipeline.
+    /// Step 2: Runs after email sync completes.
+    /// Checks sync status and starts classification if successful.
     /// </summary>
-    public async Task TriggerClassificationAsync(
+    public async Task RunClassificationStepAsync(
         Guid userId,
+        Guid syncJobId,
         int classifyBatchSize,
         int extractBatchSize
     )
     {
         _logger.LogInformation(
-            "Sequential pipeline - Classification step for user {UserId}",
-            userId
+            "Sequential pipeline - Classification step for user {UserId} after sync job {SyncJobId}",
+            userId,
+            syncJobId
         );
 
+        // Verify sync job completed successfully
+        var syncJob = await _jobRepository.GetByIdAsync(syncJobId);
+        if (syncJob == null || syncJob.Status != JobStatus.Completed)
+        {
+            _logger.LogWarning(
+                "Email sync job {SyncJobId} did not complete successfully (Status: {Status}), stopping pipeline",
+                syncJobId,
+                syncJob?.Status
+            );
+            return;
+        }
+
+        // Start classification
         var classifyJob = await _jobManagementService.CreateJobAsync(
             userId,
             JobType.Classification,
@@ -117,28 +142,45 @@ public class SequentialPipelineJob
             classifyJob.SetHangfireJobId(classifyHangfireId);
             await _jobManagementService.UpdateJobAsync(classifyJob);
 
-            // Step 3: Extraction (continues after classification completes)
-            var extractHangfireId = BackgroundJob.ContinueJobWith<SequentialPipelineJob>(
+            // Schedule extraction to run after classification completes
+            BackgroundJob.ContinueJobWith<SequentialPipelineJob>(
                 classifyHangfireId,
-                x => x.TriggerExtractionAsync(userId, extractBatchSize)
+                x => x.RunExtractionStepAsync(userId, classifyJob.Id, extractBatchSize)
             );
 
             _logger.LogInformation(
-                "Enqueued classification and extraction for user {UserId}: Classify={ClassifyJobId}, Extract={ExtractJobId}",
+                "Started classification for user {UserId}: job {JobId}",
                 userId,
-                classifyJob.Id,
-                extractHangfireId
+                classifyJob.Id
             );
         }
     }
 
     /// <summary>
-    /// Triggers extraction step of the pipeline.
+    /// Step 3: Runs after classification completes.
+    /// Checks classification status and starts extraction if successful.
     /// </summary>
-    public async Task TriggerExtractionAsync(Guid userId, int extractBatchSize)
+    public async Task RunExtractionStepAsync(Guid userId, Guid classifyJobId, int extractBatchSize)
     {
-        _logger.LogInformation("Sequential pipeline - Extraction step for user {UserId}", userId);
+        _logger.LogInformation(
+            "Sequential pipeline - Extraction step for user {UserId} after classification job {ClassifyJobId}",
+            userId,
+            classifyJobId
+        );
 
+        // Verify classification job completed successfully
+        var classifyJob = await _jobRepository.GetByIdAsync(classifyJobId);
+        if (classifyJob == null || classifyJob.Status != JobStatus.Completed)
+        {
+            _logger.LogWarning(
+                "Classification job {ClassifyJobId} did not complete successfully (Status: {Status}), stopping pipeline",
+                classifyJobId,
+                classifyJob?.Status
+            );
+            return;
+        }
+
+        // Start extraction
         var extractJob = await _jobManagementService.CreateJobAsync(
             userId,
             JobType.Extraction,
@@ -155,9 +197,9 @@ public class SequentialPipelineJob
             await _jobManagementService.UpdateJobAsync(extractJob);
 
             _logger.LogInformation(
-                "Enqueued extraction job {JobId} for user {UserId}",
-                extractJob.Id,
-                userId
+                "Started extraction for user {UserId}: job {JobId}. Pipeline complete.",
+                userId,
+                extractJob.Id
             );
         }
     }
