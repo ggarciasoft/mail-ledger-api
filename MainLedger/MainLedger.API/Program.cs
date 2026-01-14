@@ -3,6 +3,7 @@ using Hangfire.PostgreSql;
 using MainLedger.Domain.Repositories;
 using MainLedger.Infrastructure.Persistence;
 using MainLedger.Infrastructure.Persistence.Repositories;
+using MainLedger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -107,6 +108,7 @@ namespace MainLedger.API
             >();
             builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             builder.Services.AddScoped<IProcessingJobRepository, ProcessingJobRepository>();
+            builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register HTTP Context Accessor (required for CurrentUserService)
