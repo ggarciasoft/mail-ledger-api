@@ -88,7 +88,7 @@ public class ClassificationBackgroundJob
                     {
                         return (
                             email,
-                            result: (ClassificationResult?)null,
+                            result: null,
                             error: (Exception?)null,
                             cancelled: true
                         );
@@ -99,7 +99,7 @@ public class ClassificationBackgroundJob
                     {
                         return (
                             email,
-                            result: (ClassificationResult?)null,
+                            result: null,
                             error: (Exception?)null,
                             cancelled: true
                         );
@@ -119,7 +119,7 @@ public class ClassificationBackgroundJob
                         _logger.LogError(ex, "Error classifying email {EmailId}", email.Id);
                         return (
                             email,
-                            result: (ClassificationResult?)null,
+                            result:null,
                             error: ex,
                             cancelled: false
                         );
