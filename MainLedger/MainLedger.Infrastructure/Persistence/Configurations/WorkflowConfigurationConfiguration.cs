@@ -58,6 +58,13 @@ public class WorkflowConfigurationConfiguration : IEntityTypeConfiguration<Workf
             .HasColumnName("extraction_batch_size")
             .HasDefaultValue(20);
 
+        builder
+            .Property(wc => wc.TimeZoneId)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasColumnName("time_zone_id")
+            .HasDefaultValue("UTC");
+
         builder.Property(wc => wc.CreatedAt).IsRequired().HasColumnName("created_at");
 
         builder.Property(wc => wc.UpdatedAt).HasColumnName("updated_at");

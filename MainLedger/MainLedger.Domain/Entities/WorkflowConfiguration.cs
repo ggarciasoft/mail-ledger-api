@@ -25,6 +25,9 @@ public sealed class WorkflowConfiguration : Entity
     public int ClassificationBatchSize { get; private set; }
     public int ExtractionBatchSize { get; private set; }
 
+    // Timezone for schedule execution (IANA timezone ID, e.g., "America/New_York")
+    public string TimeZoneId { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -43,6 +46,7 @@ public sealed class WorkflowConfiguration : Entity
         EmailSyncBatchSize = emailSyncBatchSize;
         ClassificationBatchSize = classificationBatchSize;
         ExtractionBatchSize = extractionBatchSize;
+        TimeZoneId = "UTC"; // Default to UTC
         CreatedAt = DateTime.UtcNow;
     }
 
@@ -131,6 +135,28 @@ public sealed class WorkflowConfiguration : Entity
         EmailSyncBatchSize = emailSyncBatchSize;
         ClassificationBatchSize = classificationBatchSize;
         ExtractionBatchSize = extractionBatchSize;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Sets the timezone for schedule execution.
+    /// </summary>
+    public void SetTimeZone(string timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+            throw new ArgumentException("Timezone ID cannot be empty.", nameof(timeZoneId));
+
+        // Validate timezone ID
+        try
+        {
+            TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            throw new ArgumentException($"Invalid timezone ID: {timeZoneId}", nameof(timeZoneId));
+        }
+
+        TimeZoneId = timeZoneId;
         UpdatedAt = DateTime.UtcNow;
     }
 

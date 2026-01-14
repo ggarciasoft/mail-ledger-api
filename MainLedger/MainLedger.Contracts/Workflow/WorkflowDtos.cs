@@ -1,4 +1,3 @@
-
 using MainLedger.Domain.Enums;
 
 namespace MainLedger.Contracts.Workflow;
@@ -14,7 +13,8 @@ public record WorkflowConfigurationDto(
     string? PipelineSchedule,
     int EmailSyncBatchSize,
     int ClassificationBatchSize,
-    int ExtractionBatchSize
+    int ExtractionBatchSize,
+    string TimeZoneId
 );
 
 /// <summary>
@@ -28,5 +28,6 @@ public record UpdateWorkflowConfigDto(
     string? PipelineSchedule,
     int EmailSyncBatchSize,
     int ClassificationBatchSize,
-    int ExtractionBatchSize
+    int ExtractionBatchSize,
+    string TimeZoneId
 );

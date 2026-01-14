@@ -77,6 +77,7 @@ public class WorkflowService : IWorkflowService
             dto.ClassificationBatchSize,
             dto.ExtractionBatchSize
         );
+        config.SetTimeZone(dto.TimeZoneId);
 
         // Remove all existing recurring jobs for this user
         RemoveUserRecurringJobs(userId);
@@ -101,14 +102,17 @@ public class WorkflowService : IWorkflowService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Updated workflow configuration for user {UserId} to mode {Mode}",
+            "Updated workflow configuration for user {UserId} to mode {Mode} with timezone {TimeZone}",
             userId,
-            dto.Mode
+            dto.Mode,
+            dto.TimeZoneId
         );
     }
 
     private void SetupSeparateJobs(Guid userId, WorkflowConfiguration config)
     {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId);
+
         // Email Sync
         if (!string.IsNullOrWhiteSpace(config.EmailSyncSchedule))
         {
@@ -116,7 +120,7 @@ public class WorkflowService : IWorkflowService
                 $"email-sync-{userId}",
                 job => job.ExecuteAsync(userId, config.EmailSyncBatchSize),
                 config.EmailSyncSchedule,
-                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc }
+                new RecurringJobOptions { TimeZone = timeZone }
             );
 
             _logger.LogInformation(
@@ -133,7 +137,7 @@ public class WorkflowService : IWorkflowService
                 $"classification-{userId}",
                 job => job.ExecuteAsync(userId, config.ClassificationBatchSize),
                 config.ClassificationSchedule,
-                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc }
+                new RecurringJobOptions { TimeZone = timeZone }
             );
 
             _logger.LogInformation(
@@ -150,7 +154,7 @@ public class WorkflowService : IWorkflowService
                 $"extraction-{userId}",
                 job => job.ExecuteAsync(userId, config.ExtractionBatchSize),
                 config.ExtractionSchedule,
-                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc }
+                new RecurringJobOptions { TimeZone = timeZone }
             );
 
             _logger.LogInformation(
@@ -165,6 +169,8 @@ public class WorkflowService : IWorkflowService
     {
         if (!string.IsNullOrWhiteSpace(config.PipelineSchedule))
         {
+            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId);
+
             RecurringJob.AddOrUpdate<SequentialPipelineJob>(
                 $"pipeline-{userId}",
                 job =>
@@ -175,7 +181,7 @@ public class WorkflowService : IWorkflowService
                         config.ExtractionBatchSize
                     ),
                 config.PipelineSchedule,
-                new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc }
+                new RecurringJobOptions { TimeZone = timeZone }
             );
 
             _logger.LogInformation(
@@ -206,7 +212,8 @@ public class WorkflowService : IWorkflowService
             config.PipelineSchedule,
             config.EmailSyncBatchSize,
             config.ClassificationBatchSize,
-            config.ExtractionBatchSize
+            config.ExtractionBatchSize,
+            config.TimeZoneId
         );
     }
 }
