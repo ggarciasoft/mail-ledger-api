@@ -180,6 +180,24 @@ namespace MainLedger.API
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ClassificationBackgroundJob>();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ExtractionBackgroundJob>();
 
+            // Register Workflow Service
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IWorkflowService,
+                MainLedger.Application.Services.WorkflowService
+            >();
+
+            // Register Recurring Jobs
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.RecurringEmailSyncJob>();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.RecurringClassificationJob>();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.RecurringExtractionJob>();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.SequentialPipelineJob>();
+
+            // Register Workflow Configuration Repository
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.IWorkflowConfigurationRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.WorkflowConfigurationRepository
+            >();
+
             // Register SignalR
             builder.Services.AddSignalR();
 
