@@ -212,7 +212,7 @@ public class JobsController : ControllerBase
             _jobRepository.Update(job);
 
             // Note: We would also need to cancel the Hangfire job here
-            // Hangfire.BackgroundJob.Delete(job.HangfireJobId);
+            Hangfire.BackgroundJob.Delete(job.HangfireJobId);
 
             _logger.LogInformation("Cancelled job {JobId} for user {UserId}", id, userId);
 

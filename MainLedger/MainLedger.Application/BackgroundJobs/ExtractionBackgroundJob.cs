@@ -91,6 +91,26 @@ public class ExtractionBackgroundJob
 
             foreach (var email in emails)
             {
+                // Check if job has been cancelled
+                var currentJob = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+                if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
+                {
+                    _logger.LogInformation("Job {JobId} was cancelled, stopping extraction", jobId);
+                    return;
+                }
+
+                // Check cancellation token
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation(
+                        "Cancellation requested for job {JobId}, stopping extraction",
+                        jobId
+                    );
+                    job.Cancel();
+                    await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+                    return;
+                }
+
                 try
                 {
                     // Extract financial data

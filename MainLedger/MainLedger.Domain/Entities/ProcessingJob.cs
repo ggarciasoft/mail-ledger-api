@@ -134,6 +134,17 @@ public sealed class ProcessingJob : Entity
         CompletedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Sets the Hangfire job ID after the job has been enqueued.
+    /// </summary>
+    public void SetHangfireJobId(string hangfireJobId)
+    {
+        if (string.IsNullOrWhiteSpace(hangfireJobId))
+            throw new ArgumentException("Hangfire job ID cannot be empty.", nameof(hangfireJobId));
+
+        HangfireJobId = hangfireJobId;
+    }
+
     // For EF Core
     private ProcessingJob()
         : base() { }

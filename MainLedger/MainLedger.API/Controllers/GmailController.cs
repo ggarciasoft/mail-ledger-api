@@ -127,7 +127,7 @@ public class GmailController : ControllerBase
                 return Conflict(
                     new
                     {
-                        error = "An email sync job is already running. Please wait for it to complete."
+                        error = "An email sync job is already running. Please wait for it to complete.",
                     }
                 );
             }
@@ -137,6 +137,10 @@ public class GmailController : ControllerBase
                 Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.EmailSyncBackgroundJob>(
                     x => x.ExecuteAsync(job.Id, userId.Value, maxEmails, CancellationToken.None)
                 );
+
+            // Update job with Hangfire job ID
+            job.SetHangfireJobId(hangfireJobId);
+            await _jobManagementService.UpdateJobAsync(job, cancellationToken);
 
             _logger.LogInformation(
                 "Enqueued email sync job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",

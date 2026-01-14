@@ -74,6 +74,29 @@ public class ClassificationBackgroundJob
 
             foreach (var email in emails)
             {
+                // Check if job has been cancelled
+                var currentJob = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+                if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
+                {
+                    _logger.LogInformation(
+                        "Job {JobId} was cancelled, stopping classification",
+                        jobId
+                    );
+                    return;
+                }
+
+                // Check cancellation token
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation(
+                        "Cancellation requested for job {JobId}, stopping classification",
+                        jobId
+                    );
+                    job.Cancel();
+                    await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+                    return;
+                }
+
                 try
                 {
                     var result = await _classificationService.ClassifyEmailAsync(

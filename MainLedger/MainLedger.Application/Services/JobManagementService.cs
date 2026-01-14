@@ -91,4 +91,16 @@ public class JobManagementService : IJobManagementService
 
         return job;
     }
+
+    /// <summary>
+    /// Updates an existing job in the database.
+    /// </summary>
+    public async Task UpdateJobAsync(
+        ProcessingJob job,
+        CancellationToken cancellationToken = default
+    )
+    {
+        _jobRepository.Update(job);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 }

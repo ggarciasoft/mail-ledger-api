@@ -109,6 +109,26 @@ public class EmailSyncBackgroundJob
 
             foreach (var email in fetchedEmails)
             {
+                // Check if job has been cancelled
+                var currentJob = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+                if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
+                {
+                    _logger.LogInformation("Job {JobId} was cancelled, stopping email sync", jobId);
+                    return;
+                }
+
+                // Check cancellation token
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogInformation(
+                        "Cancellation requested for job {JobId}, stopping email sync",
+                        jobId
+                    );
+                    job.Cancel();
+                    await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+                    return;
+                }
+
                 try
                 {
                     // Deduplicate
@@ -154,7 +174,12 @@ public class EmailSyncBackgroundJob
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing email {MessageId}", email.MessageId);
+                    _logger.LogError(
+                        ex,
+                        "Error processing email {Id} for job {JobId}",
+                        email.Id,
+                        jobId
+                    );
                     ignoredCount++;
                     processedCount++;
                 }

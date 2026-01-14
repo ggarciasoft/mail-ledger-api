@@ -97,6 +97,10 @@ public class ProcessingController : ControllerBase
                     x => x.ExecuteAsync(job.Id, userId.Value, batchSize, CancellationToken.None)
                 );
 
+            // Update job with Hangfire job ID
+            job.SetHangfireJobId(hangfireJobId);
+            await _jobManagementService.UpdateJobAsync(job, cancellationToken);
+
             _logger.LogInformation(
                 "Enqueued classification job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",
                 job.Id,
@@ -154,6 +158,10 @@ public class ProcessingController : ControllerBase
                 Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.ExtractionBackgroundJob>(
                     x => x.ExecuteAsync(job.Id, userId.Value, batchSize, CancellationToken.None)
                 );
+
+            // Update job with Hangfire job ID
+            job.SetHangfireJobId(hangfireJobId);
+            await _jobManagementService.UpdateJobAsync(job, cancellationToken);
 
             _logger.LogInformation(
                 "Enqueued extraction job {JobId} (Hangfire: {HangfireJobId}) for user {UserId}",
