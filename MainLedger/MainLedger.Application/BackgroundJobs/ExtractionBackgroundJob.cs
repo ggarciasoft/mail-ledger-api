@@ -3,6 +3,7 @@ using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.BackgroundJobs;
@@ -12,37 +13,19 @@ namespace MainLedger.Application.BackgroundJobs;
 /// </summary>
 public class ExtractionBackgroundJob
 {
-    private readonly IEmailMessageRepository _emailRepository;
-    private readonly IExtractionCandidateRepository _candidateRepository;
-    private readonly IExtractionService _extractionService;
-    private readonly INormalizationService _normalizationService;
-    private readonly IExtractionVersionRepository _versionRepository;
-    private readonly IProcessingJobRepository _jobRepository;
     private readonly IJobNotificationService _jobNotificationService;
-    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ExtractionBackgroundJob> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     public ExtractionBackgroundJob(
-        IEmailMessageRepository emailRepository,
-        IExtractionCandidateRepository candidateRepository,
-        IExtractionService extractionService,
-        INormalizationService normalizationService,
-        IExtractionVersionRepository versionRepository,
-        IProcessingJobRepository jobRepository,
         IJobNotificationService jobNotificationService,
-        IUnitOfWork unitOfWork,
-        ILogger<ExtractionBackgroundJob> logger
+        ILogger<ExtractionBackgroundJob> logger,
+        IServiceProvider serviceProvider
     )
     {
-        _emailRepository = emailRepository;
-        _candidateRepository = candidateRepository;
-        _extractionService = extractionService;
-        _normalizationService = normalizationService;
-        _versionRepository = versionRepository;
-        _jobRepository = jobRepository;
         _jobNotificationService = jobNotificationService;
-        _unitOfWork = unitOfWork;
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -53,7 +36,15 @@ public class ExtractionBackgroundJob
         CancellationToken cancellationToken
     )
     {
-        var job = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+        // Fetch job using scoped repository
+        Domain.Entities.ProcessingJob job;
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var jobRepository =
+                scope.ServiceProvider.GetRequiredService<IProcessingJobRepository>();
+            job = await jobRepository.GetByIdAsync(jobId, cancellationToken);
+        }
+
         if (job == null)
         {
             _logger.LogError("Job {JobId} not found", jobId);
@@ -68,22 +59,28 @@ public class ExtractionBackgroundJob
                 userId
             );
 
-            // Get active extraction version
-            var version = await _versionRepository.GetActiveAsync(cancellationToken);
-            if (version == null)
+            // Get active extraction version and emails using scoped services
+            ExtractionVersion version;
+            List<EmailMessage> emails;
+            using (var scope = _serviceProvider.CreateScope())
             {
-                throw new InvalidOperationException("No active extraction version found");
+                var versionRepository =
+                    scope.ServiceProvider.GetRequiredService<IExtractionVersionRepository>();
+                var emailRepository =
+                    scope.ServiceProvider.GetRequiredService<IEmailMessageRepository>();
+
+                version = await versionRepository.GetActiveAsync(cancellationToken);
+                if (version == null)
+                {
+                    throw new InvalidOperationException("No active extraction version found");
+                }
+
+                emails = await emailRepository.GetPendingExtractionAsync(
+                    userId,
+                    batchSize,
+                    cancellationToken
+                );
             }
-
-            // Get classified emails
-            var emails = await _emailRepository.GetPendingExtractionAsync(
-                userId,
-                batchSize,
-                cancellationToken
-            );
-
-            job.Start(emails.Count);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             int successCount = 0;
             int failureCount = 0;
@@ -93,14 +90,23 @@ public class ExtractionBackgroundJob
             // Use semaphore to limit concurrent OpenAI API calls (max 5 concurrent for extraction)
             var semaphore = new SemaphoreSlim(5);
 
-            // Create tasks for parallel processing
+            // Create tasks for parallel processing - each with its own scope
             var tasks = emails.Select(async email =>
             {
                 await semaphore.WaitAsync(cancellationToken);
                 try
                 {
+                    // Create a new scope for this parallel task
+                    using var scope = _serviceProvider.CreateScope();
+                    var extractionService =
+                        scope.ServiceProvider.GetRequiredService<IExtractionService>();
+                    var normalizationService =
+                        scope.ServiceProvider.GetRequiredService<INormalizationService>();
+                    var jobRepository =
+                        scope.ServiceProvider.GetRequiredService<IProcessingJobRepository>();
+
                     // Check if job has been cancelled
-                    var currentJob = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
+                    var currentJob = await jobRepository.GetByIdAsync(jobId, cancellationToken);
                     if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
                     {
                         return (
@@ -125,14 +131,14 @@ public class ExtractionBackgroundJob
                     try
                     {
                         // Extract financial data
-                        var extractionResult = await _extractionService.ExtractFinancialDataAsync(
+                        var extractionResult = await extractionService.ExtractFinancialDataAsync(
                             email,
                             cancellationToken
                         );
 
                         // Normalize the extracted data
                         var normalizationResult =
-                            await _normalizationService.NormalizeExtractionAsync(
+                            await normalizationService.NormalizeExtractionAsync(
                                 extractionResult,
                                 email,
                                 cancellationToken
@@ -297,48 +303,71 @@ public class ExtractionBackgroundJob
             {
                 _logger.LogInformation("Job {JobId} was cancelled during extraction", jobId);
                 job.Cancel();
-                await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+                using (var scope = _serviceProvider.CreateScope())
+                {
+                    var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                    await unitOfWork.SaveChangesAsync(CancellationToken.None);
+                }
                 return;
             }
 
-            // Process results
-            foreach (var (email, candidate, error, _) in results)
+            // Process results and save using scoped services
+            using (var scope = _serviceProvider.CreateScope())
             {
-                if (error != null)
+                var candidateRepository =
+                    scope.ServiceProvider.GetRequiredService<IExtractionCandidateRepository>();
+                var emailRepository =
+                    scope.ServiceProvider.GetRequiredService<IEmailMessageRepository>();
+                var jobRepository =
+                    scope.ServiceProvider.GetRequiredService<IProcessingJobRepository>();
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                // Re-fetch job in this scope to ensure proper tracking
+                var trackedJob = await jobRepository.GetByIdAsync(jobId, cancellationToken);
+
+                // Start the job with the email count
+                trackedJob.Start(emails.Count);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                foreach (var (email, candidate, error, _) in results)
                 {
-                    failureCount++;
+                    if (error != null)
+                    {
+                        failureCount++;
+                    }
+                    else if (candidate != null)
+                    {
+                        await candidateRepository.AddAsync(candidate, cancellationToken);
+
+                        // Update email processing status
+                        email.SetProcessingStatus(EmailProcessingStatus.Extracted);
+                        emailRepository.Update(email);
+
+                        successCount++;
+                    }
+
+                    processedCount++;
+
+                    // Update progress every 5 emails
+                    if (processedCount - lastReportedCount >= 5)
+                    {
+                        trackedJob.UpdateProgress(processedCount, successCount, failureCount);
+                        await unitOfWork.SaveChangesAsync(cancellationToken);
+                        await _jobNotificationService.NotifyJobUpdated(userId, trackedJob);
+                        lastReportedCount = processedCount;
+                    }
                 }
-                else if (candidate != null)
-                {
-                    await _candidateRepository.AddAsync(candidate, cancellationToken);
 
-                    // Update email processing status
-                    email.SetProcessingStatus(EmailProcessingStatus.Extracted);
-                    _emailRepository.Update(email);
+                // Final progress update
+                trackedJob.UpdateProgress(processedCount, successCount, failureCount);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
 
-                    successCount++;
-                }
-
-                processedCount++;
-
-                // Update progress every 5 emails
-                if (processedCount - lastReportedCount >= 5)
-                {
-                    job.UpdateProgress(processedCount, successCount, failureCount);
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    await _jobNotificationService.NotifyJobUpdated(userId, job);
-                    lastReportedCount = processedCount;
-                }
+                // Mark job as complete and save in same scope
+                trackedJob.Complete();
+                await unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
-            // Final progress update
-            job.UpdateProgress(processedCount, successCount, failureCount);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _jobNotificationService.NotifyJobUpdated(userId, job);
-
-            // Mark job as complete
-            job.Complete();
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _jobNotificationService.NotifyJobCompleted(userId, job);
 
             _logger.LogInformation(
@@ -353,7 +382,11 @@ public class ExtractionBackgroundJob
         {
             _logger.LogError(ex, "Extraction job {JobId} failed", jobId);
             job.Fail(ex.Message);
-            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                await unitOfWork.SaveChangesAsync(CancellationToken.None);
+            }
             await _jobNotificationService.NotifyJobFailed(userId, job);
         }
     }
