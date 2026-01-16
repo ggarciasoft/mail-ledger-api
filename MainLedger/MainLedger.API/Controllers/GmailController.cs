@@ -78,12 +78,8 @@ public class GmailController : ControllerBase
             );
             if (!canConnect)
             {
-                return BadRequest(
-                    new
-                    {
-                        error = "Gmail account limit reached for your subscription plan. Please upgrade to connect more accounts.",
-                    }
-                );
+                // Redirect to settings with error
+                return Redirect("http://localhost:5173/settings?error=gmail_limit_reached");
             }
 
             var connection = await _gmailService.HandleCallbackAsync(
@@ -91,18 +87,15 @@ public class GmailController : ControllerBase
                 code,
                 cancellationToken
             );
-            return Ok(
-                new
-                {
-                    message = "Gmail connected successfully",
-                    email = connection.Email.ToString(),
-                }
-            );
+
+            // Redirect to settings page with success
+            return Redirect("http://localhost:5173/settings?gmail_connected=true");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling Gmail callback for user {UserId}", userId);
-            return BadRequest(new { error = ex.Message });
+            // Redirect to settings with error
+            return Redirect($"http://localhost:5173/settings?error=gmail_connection_failed");
         }
     }
 

@@ -274,6 +274,11 @@ namespace MainLedger.API
             // Register Email Providers
             builder.Services.AddScoped<
                 MainLedger.Domain.Services.IEmailProvider,
+                MainLedger.Integrations.Services.GmailEmailProvider
+            >();
+
+            builder.Services.AddScoped<
+                MainLedger.Domain.Services.IEmailProvider,
                 MainLedger.Integrations.Services.OutlookEmailProvider
             >();
 

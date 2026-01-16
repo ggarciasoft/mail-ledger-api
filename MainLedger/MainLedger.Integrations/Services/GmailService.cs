@@ -5,6 +5,7 @@ using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
 using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
 using MainLedger.Domain.Settings;
 using MainLedger.Domain.ValueObjects;
@@ -19,6 +20,7 @@ public class GmailService : IGmailService
 {
     private readonly GmailSettings _settings;
     private readonly IGmailConnectionRepository _connectionRepository;
+    private readonly IEmailConnectionRepository _emailConnectionRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITokenEncryptionService _tokenEncryption;
@@ -26,12 +28,15 @@ public class GmailService : IGmailService
     public GmailService(
         IOptions<GmailSettings> settings,
         IGmailConnectionRepository connectionRepository,
+        IEmailConnectionRepository emailConnectionRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
-        ITokenEncryptionService tokenEncryption)
+        ITokenEncryptionService tokenEncryption
+    )
     {
         _settings = settings.Value;
         _connectionRepository = connectionRepository;
+        _emailConnectionRepository = emailConnectionRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _tokenEncryption = tokenEncryption;
@@ -39,16 +44,18 @@ public class GmailService : IGmailService
 
     public string GetAuthorizationUrl(Guid userId)
     {
-        var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-        {
-            ClientSecrets = new ClientSecrets
+        var flow = new GoogleAuthorizationCodeFlow(
+            new GoogleAuthorizationCodeFlow.Initializer
             {
-                ClientId = _settings.ClientId,
-                ClientSecret = _settings.ClientSecret
-            },
-            Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly },
-            DataStore = null // We manage storage manually
-        });
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId = _settings.ClientId,
+                    ClientSecret = _settings.ClientSecret,
+                },
+                Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly },
+                DataStore = null, // We manage storage manually
+            }
+        );
 
         // Build authorization URL manually to have full control over parameters
         var authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -58,35 +65,46 @@ public class GmailService : IGmailService
             { "redirect_uri", _settings.RedirectUri },
             { "response_type", "code" },
             { "scope", Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly },
-            { "access_type", "offline" },  // Request refresh token
-            { "prompt", "consent" },       // Force consent screen
-            { "state", userId.ToString() } // Pass userId for callback correlation
+            { "access_type", "offline" }, // Request refresh token
+            { "prompt", "consent" }, // Force consent screen
+            { "state", userId.ToString() }, // Pass userId for callback correlation
         };
 
-        var queryString = string.Join("&", parameters.Select(kvp => 
-            $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
+        var queryString = string.Join(
+            "&",
+            parameters.Select(kvp =>
+                $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"
+            )
+        );
 
         return $"{authorizationUrl}?{queryString}";
     }
 
-    public async Task<GmailConnection> HandleCallbackAsync(Guid userId, string code, CancellationToken cancellationToken)
+    public async Task<GmailConnection> HandleCallbackAsync(
+        Guid userId,
+        string code,
+        CancellationToken cancellationToken
+    )
     {
-        var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-        {
-            ClientSecrets = new ClientSecrets
+        var flow = new GoogleAuthorizationCodeFlow(
+            new GoogleAuthorizationCodeFlow.Initializer
             {
-                ClientId = _settings.ClientId,
-                ClientSecret = _settings.ClientSecret
-            },
-            Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly }
-        });
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId = _settings.ClientId,
+                    ClientSecret = _settings.ClientSecret,
+                },
+                Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly },
+            }
+        );
 
         // Exchange code for token
         var tokenResponse = await flow.ExchangeCodeForTokenAsync(
             userId.ToString(),
             code,
             _settings.RedirectUri,
-            cancellationToken);
+            cancellationToken
+        );
 
         // Get user
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
@@ -95,51 +113,93 @@ public class GmailService : IGmailService
             throw new KeyNotFoundException($"User not found: {userId}");
         }
 
-        // Get user's email from the token (verify it matches expected user if needed)
-        // For simplicity, we assume the connected account belongs to the user
-        // In production, you'd fetch the user profile from Google to verify email
+        // Get user's email from Gmail profile
         var credential = new UserCredential(flow, userId.ToString(), tokenResponse);
-        var gmailService = new Google.Apis.Gmail.v1.GmailService(new Google.Apis.Services.BaseClientService.Initializer
-        {
-            HttpClientInitializer = credential
-        });
+        var gmailService = new Google.Apis.Gmail.v1.GmailService(
+            new Google.Apis.Services.BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+            }
+        );
 
         var profile = await gmailService.Users.GetProfile("me").ExecuteAsync(cancellationToken);
-        
-        // Check if connection already exists
-        var existingConnection = await _connectionRepository.GetByUserIdAsync(userId, cancellationToken);
-        
-        GmailConnection connection;
-        
+
         // Encrypt the refresh token before storing
-        var refreshToken = tokenResponse.RefreshToken ?? 
-            throw new InvalidOperationException("No refresh token received. Please ensure offline access is granted.");
+        var refreshToken =
+            tokenResponse.RefreshToken
+            ?? throw new InvalidOperationException(
+                "No refresh token received. Please ensure offline access is granted."
+            );
         var encryptedToken = _tokenEncryption.Encrypt(refreshToken);
-        
-        if (existingConnection != null)
+
+        // Check if EmailConnection already exists
+        var existingEmailConnection = await _emailConnectionRepository.GetByUserAndProviderAsync(
+            userId,
+            EmailProvider.Gmail
+        );
+
+        if (existingEmailConnection != null)
         {
-            // Update existing connection using the Reactivate method
-            existingConnection.Reactivate(encryptedToken);
-            _connectionRepository.Update(existingConnection);
-            connection = existingConnection;
+            // Update existing EmailConnection
+            existingEmailConnection.Email = profile.EmailAddress;
+            existingEmailConnection.EncryptedRefreshToken = encryptedToken;
+            existingEmailConnection.EncryptedAccessToken = string.Empty; // Gmail doesn't use access tokens the same way
+            existingEmailConnection.TokenExpiresAt = DateTime.UtcNow.AddYears(1); // Gmail refresh tokens don't expire
+            existingEmailConnection.IsActive = true;
+            existingEmailConnection.ConnectedAt = DateTime.UtcNow;
+
+            await _emailConnectionRepository.UpdateAsync(existingEmailConnection);
         }
         else
         {
-            // Create new connection with encrypted token
-            connection = GmailConnection.Create(
+            // Create new EmailConnection
+            var emailConnection = new EmailConnection(Guid.NewGuid())
+            {
+                UserId = userId,
+                Provider = EmailProvider.Gmail,
+                Email = profile.EmailAddress,
+                EncryptedAccessToken = string.Empty, // Gmail doesn't use access tokens the same way
+                EncryptedRefreshToken = encryptedToken,
+                TokenExpiresAt = DateTime.UtcNow.AddYears(1), // Gmail refresh tokens don't expire
+                IsActive = true,
+                ConnectedAt = DateTime.UtcNow,
+            };
+
+            await _emailConnectionRepository.AddAsync(emailConnection);
+        }
+
+        // Also maintain the old GmailConnection for backward compatibility with existing sync logic
+        var existingGmailConnection = await _connectionRepository.GetByUserIdAsync(
+            userId,
+            cancellationToken
+        );
+        GmailConnection gmailConnection;
+
+        if (existingGmailConnection != null)
+        {
+            existingGmailConnection.Reactivate(encryptedToken);
+            _connectionRepository.Update(existingGmailConnection);
+            gmailConnection = existingGmailConnection;
+        }
+        else
+        {
+            gmailConnection = GmailConnection.Create(
                 userId,
                 EmailAddress.Create(profile.EmailAddress),
                 encryptedToken
             );
-            await _connectionRepository.AddAsync(connection, cancellationToken);
+            await _connectionRepository.AddAsync(gmailConnection, cancellationToken);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return connection;
+        return gmailConnection;
     }
 
-    public async Task RefreshTokenAsync(GmailConnection connection, CancellationToken cancellationToken)
+    public async Task RefreshTokenAsync(
+        GmailConnection connection,
+        CancellationToken cancellationToken
+    )
     {
         // To refresh, we just need to ensure the credential can get a new access token
         // The Google library handles this automatically if the refresh token is valid
@@ -154,16 +214,17 @@ public class GmailService : IGmailService
         DateTime? processFrom = null,
         string? historyId = null,
         int maxResults = 50,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var service = await GetGoogleGmailServiceAsync(connection, cancellationToken);
 
         var request = service.Users.Messages.List("me");
         request.MaxResults = maxResults;
-        
+
         // Build Gmail query from rules and filters
         var queryParts = new List<string>();
-        
+
         // Date filter
         if (processFrom.HasValue)
         {
@@ -182,7 +243,7 @@ public class GmailService : IGmailService
                 queryParts.Add($"({ruleQuery})");
             }
         }
-        
+
         if (queryParts.Count > 0)
         {
             request.Q = string.Join(" ", queryParts);
@@ -212,7 +273,9 @@ public class GmailService : IGmailService
             if (!DateTime.TryParse(dateRaw, out var receivedAt))
             {
                 // Fallback to internal date
-                receivedAt = DateTimeOffset.FromUnixTimeMilliseconds(fullMsg.InternalDate ?? 0).UtcDateTime;
+                receivedAt = DateTimeOffset
+                    .FromUnixTimeMilliseconds(fullMsg.InternalDate ?? 0)
+                    .UtcDateTime;
             }
 
             // Parse Body
@@ -220,14 +283,14 @@ public class GmailService : IGmailService
 
             // Create Domain Entity
             // Note: We need to parse 'From' carefully: "Name <email@example.com>"
-            // For now, simpler parsing or trust EmailAddress value object to handle it 
+            // For now, simpler parsing or trust EmailAddress value object to handle it
             // (EmailAddress expects clean email, so we need to extract it)
             var cleanEmail = ExtractEmail(fromRaw);
-            
+
             // Compute hash for deduplication
             var contentHash = ComputeContentHash(fullMsg.Id, body);
 
-            try 
+            try
             {
                 var emailEntity = EmailMessage.Create(
                     fullMsg.Id,
@@ -262,17 +325,22 @@ public class GmailService : IGmailService
 
     // --- Private Helpers ---
 
-    private async Task<Google.Apis.Gmail.v1.GmailService> GetGoogleGmailServiceAsync(GmailConnection connection, CancellationToken cancellationToken)
+    private async Task<Google.Apis.Gmail.v1.GmailService> GetGoogleGmailServiceAsync(
+        GmailConnection connection,
+        CancellationToken cancellationToken
+    )
     {
-        var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-        {
-            ClientSecrets = new ClientSecrets
+        var flow = new GoogleAuthorizationCodeFlow(
+            new GoogleAuthorizationCodeFlow.Initializer
             {
-                ClientId = _settings.ClientId,
-                ClientSecret = _settings.ClientSecret
-            },
-            Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly }
-        });
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId = _settings.ClientId,
+                    ClientSecret = _settings.ClientSecret,
+                },
+                Scopes = new[] { Google.Apis.Gmail.v1.GmailService.Scope.GmailReadonly },
+            }
+        );
 
         // Decrypt the stored refresh token
         var decryptedRefreshToken = _tokenEncryption.Decrypt(connection.RefreshTokenHash);
@@ -282,29 +350,33 @@ public class GmailService : IGmailService
         var tokenResponse = new TokenResponse
         {
             RefreshToken = decryptedRefreshToken,
-            ExpiresInSeconds = 0
+            ExpiresInSeconds = 0,
         };
 
         var credential = new UserCredential(flow, connection.UserId.ToString(), tokenResponse);
-        
+
         // Ensure we can get an access token (verifies refresh token is still valid)
         // If this fails, the connection might be revoked
-        try 
+        try
         {
             await credential.RefreshTokenAsync(cancellationToken);
         }
-        catch 
+        catch
         {
             // Token might be invalid/revoked
             // In a real app we might mark connection as inactive here
-            throw new UnauthorizedAccessException("Failed to refresh Gmail token. Connection may need re-authorization.");
+            throw new UnauthorizedAccessException(
+                "Failed to refresh Gmail token. Connection may need re-authorization."
+            );
         }
 
-        return new Google.Apis.Gmail.v1.GmailService(new Google.Apis.Services.BaseClientService.Initializer
-        {
-            HttpClientInitializer = credential,
-            ApplicationName = "MailLedger"
-        });
+        return new Google.Apis.Gmail.v1.GmailService(
+            new Google.Apis.Services.BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = "MailLedger",
+            }
+        );
     }
 
     private string GetBody(MessagePart payload)
@@ -335,8 +407,12 @@ public class GmailService : IGmailService
         var base64 = input.Replace('-', '+').Replace('_', '/');
         switch (base64.Length % 4)
         {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
+            case 2:
+                base64 += "==";
+                break;
+            case 3:
+                base64 += "=";
+                break;
         }
         var bytes = Convert.FromBase64String(base64);
         return System.Text.Encoding.UTF8.GetString(bytes);
@@ -347,12 +423,12 @@ public class GmailService : IGmailService
         // Format: "Name <email@example.com>" or "email@example.com"
         var start = fromHeader.IndexOf('<');
         var end = fromHeader.LastIndexOf('>');
-        
+
         if (start >= 0 && end > start)
         {
             return fromHeader.Substring(start + 1, end - start - 1);
         }
-        
+
         return fromHeader.Trim();
     }
 
@@ -401,7 +477,10 @@ public class GmailService : IGmailService
                 // Use subject: operator for simple text patterns
                 // Remove regex special chars for Gmail compatibility
                 var pattern = System.Text.RegularExpressions.Regex.Replace(
-                    rule.SubjectPattern, @"[.*+?^${}()|[\]\\]", "");
+                    rule.SubjectPattern,
+                    @"[.*+?^${}()|[\]\\]",
+                    ""
+                );
                 if (!string.IsNullOrWhiteSpace(pattern))
                 {
                     subjectQueries.Add($"subject:{pattern}");
@@ -413,7 +492,10 @@ public class GmailService : IGmailService
             {
                 // Use simple text search for keywords
                 var pattern = System.Text.RegularExpressions.Regex.Replace(
-                    rule.KeywordPattern, @"[.*+?^${}()|[\]\\]", "");
+                    rule.KeywordPattern,
+                    @"[.*+?^${}()|[\]\\]",
+                    ""
+                );
                 if (!string.IsNullOrWhiteSpace(pattern))
                 {
                     keywordQueries.Add(pattern);
@@ -426,14 +508,20 @@ public class GmailService : IGmailService
                 // Gmail labels use label: or has: operators
                 // Examples: label:important, label:finance, has:star
                 // Support multiple labels separated by | (pipe) for OR logic
-                var labels = rule.LabelPattern.Split(new[] { '|', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                var labels = rule.LabelPattern.Split(
+                    new[] { '|', ',' },
+                    StringSplitOptions.RemoveEmptyEntries
+                );
                 foreach (var label in labels)
                 {
                     var cleanLabel = label.Trim().ToLower();
                     // Remove regex special characters
                     cleanLabel = System.Text.RegularExpressions.Regex.Replace(
-                        cleanLabel, @"[.*+?^${}()|[\]\\]", "");
-                    
+                        cleanLabel,
+                        @"[.*+?^${}()|[\]\\]",
+                        ""
+                    );
+
                     if (!string.IsNullOrWhiteSpace(cleanLabel))
                     {
                         labelQueries.Add($"label:{cleanLabel}");
@@ -468,10 +556,8 @@ public class GmailService : IGmailService
             return emails;
 
         var activeRules = rules.Where(r => r.IsActive).OrderBy(r => r.Priority).ToList();
-        
+
         // Filter emails: keep only those that match at least one rule
-        return emails.Where(email => 
-            activeRules.Any(rule => rule.Matches(email))
-        ).ToList();
+        return emails.Where(email => activeRules.Any(rule => rule.Matches(email))).ToList();
     }
 }
