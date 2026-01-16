@@ -1,3 +1,4 @@
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Repositories;
 using MainLedger.Domain.Services;
@@ -12,6 +13,7 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
     private readonly IUserRepository _userRepository;
     private readonly IApiKeyRepository _apiKeyRepository;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<CreateApiKeyCommandHandler> _logger;
 
@@ -19,6 +21,7 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         IUserRepository userRepository,
         IApiKeyRepository apiKeyRepository,
         IPasswordHasher passwordHasher,
+        ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
         ILogger<CreateApiKeyCommandHandler> logger
     )
@@ -26,6 +29,7 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         _userRepository = userRepository;
         _apiKeyRepository = apiKeyRepository;
         _passwordHasher = passwordHasher;
+        _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -47,6 +51,18 @@ public class CreateApiKeyCommandHandler : IRequestHandler<CreateApiKeyCommand, C
         if (!user.IsActive)
         {
             throw new InvalidOperationException("Cannot create API key for inactive user.");
+        }
+
+        // Check subscription limits
+        var canCreateApiKey = await _subscriptionService.CanCreateApiKeyAsync(
+            request.UserId,
+            cancellationToken
+        );
+        if (!canCreateApiKey)
+        {
+            throw new InvalidOperationException(
+                "API key limit reached for your subscription plan. Please upgrade to create more API keys."
+            );
         }
 
         // Validate scopes

@@ -15,16 +15,19 @@ namespace MainLedger.Application.Services;
 public class WorkflowService : IWorkflowService
 {
     private readonly IWorkflowConfigurationRepository _repository;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<WorkflowService> _logger;
 
     public WorkflowService(
         IWorkflowConfigurationRepository repository,
+        ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
         ILogger<WorkflowService> logger
     )
     {
         _repository = repository;
+        _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -68,6 +71,21 @@ public class WorkflowService : IWorkflowService
         else
         {
             _repository.Update(config);
+        }
+
+        // Check subscription permissions for workflow automation
+        if (dto.Mode != WorkflowMode.Manual)
+        {
+            var canUseWorkflow = await _subscriptionService.CanUseWorkflowAutomationAsync(
+                userId,
+                cancellationToken
+            );
+            if (!canUseWorkflow)
+            {
+                throw new InvalidOperationException(
+                    "Workflow automation is not available on your subscription plan. Please upgrade to use automated workflows."
+                );
+            }
         }
 
         // Update configuration

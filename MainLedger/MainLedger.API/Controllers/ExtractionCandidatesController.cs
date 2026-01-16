@@ -1,4 +1,5 @@
 using MainLedger.Application.Authentication.Services;
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Application.ExtractionCandidates.Commands;
 using MainLedger.Application.ExtractionCandidates.Queries;
 using MainLedger.Contracts.Common;
@@ -20,16 +21,19 @@ public class ExtractionCandidatesController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly ILogger<ExtractionCandidatesController> _logger;
 
     public ExtractionCandidatesController(
         IMediator mediator,
         ICurrentUserService currentUserService,
+        ISubscriptionService subscriptionService,
         ILogger<ExtractionCandidatesController> logger
     )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
+        _subscriptionService = subscriptionService;
         _logger = logger;
     }
 
@@ -299,6 +303,18 @@ public class ExtractionCandidatesController : ControllerBase
 
         try
         {
+            // Check subscription permissions for bulk operations
+            var canUseBulkOps = await _subscriptionService.CanUseBulkOperationsAsync(
+                userId.Value,
+                cancellationToken
+            );
+            if (!canUseBulkOps)
+            {
+                return Forbid(
+                    "Bulk operations are not available on your subscription plan. Please upgrade to use bulk confirm/reject."
+                );
+            }
+
             var command = new BulkConfirmExtractionCandidatesCommand(
                 request.CandidateIds,
                 userId.Value
@@ -342,6 +358,18 @@ public class ExtractionCandidatesController : ControllerBase
 
         try
         {
+            // Check subscription permissions for bulk operations
+            var canUseBulkOps = await _subscriptionService.CanUseBulkOperationsAsync(
+                userId.Value,
+                cancellationToken
+            );
+            if (!canUseBulkOps)
+            {
+                return Forbid(
+                    "Bulk operations are not available on your subscription plan. Please upgrade to use bulk confirm/reject."
+                );
+            }
+
             var command = new BulkRejectExtractionCandidatesCommand(
                 request.CandidateIds,
                 userId.Value,

@@ -1,0 +1,57 @@
+namespace MainLedger.Contracts.Subscriptions;
+
+/// <summary>
+/// DTO for subscription plan information.
+/// </summary>
+public record SubscriptionPlanDto(
+    Guid Id,
+    string Name,
+    string Description,
+    decimal MonthlyPrice,
+    int MonthlyEmailLimit,
+    int MaxGmailAccounts,
+    int MaxApiKeys,
+    int HistoryRetentionDays,
+    bool CanExport,
+    bool CanUseWorkflowAutomation,
+    bool CanUseWebhooks,
+    int MaxWebhooks,
+    bool CanUseBulkOperations,
+    bool IsActive
+);
+
+/// <summary>
+/// DTO for user subscription information.
+/// </summary>
+public record UserSubscriptionDto(
+    Guid Id,
+    SubscriptionPlanDto SubscriptionPlan,
+    DateTime StartDate,
+    DateTime? EndDate,
+    string Status,
+    int EmailsProcessedThisMonth,
+    DateTime CurrentPeriodStart,
+    DateTime CurrentPeriodEnd
+);
+
+/// <summary>
+/// DTO for subscription usage statistics.
+/// </summary>
+public record SubscriptionUsageDto(
+    int EmailsProcessed,
+    int EmailLimit,
+    int GmailAccountsConnected,
+    int GmailAccountsLimit,
+    int ApiKeysCreated,
+    int ApiKeysLimit
+);
+
+/// <summary>
+/// Request to upgrade subscription.
+/// </summary>
+public record UpgradeSubscriptionRequest(Guid PlanId);
+
+/// <summary>
+/// Request to cancel subscription.
+/// </summary>
+public record CancelSubscriptionRequest(string Reason);

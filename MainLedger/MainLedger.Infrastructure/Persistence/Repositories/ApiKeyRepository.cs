@@ -63,4 +63,15 @@ public class ApiKeyRepository : IApiKeyRepository
     {
         return await _context.ApiKeys.AnyAsync(a => a.Id == id, cancellationToken);
     }
+
+    public async Task<int> CountByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.ApiKeys.CountAsync(
+            a => a.UserId == userId && !a.IsRevoked,
+            cancellationToken
+        );
+    }
 }

@@ -200,6 +200,38 @@ namespace MainLedger.API
                 MainLedger.Infrastructure.Persistence.Repositories.WorkflowConfigurationRepository
             >();
 
+            // Register Subscription Repositories
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.ISubscriptionPlanRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.SubscriptionPlanRepository
+            >();
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.IUserSubscriptionRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.UserSubscriptionRepository
+            >();
+
+            // Register Subscription Service
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.ISubscriptionService,
+                MainLedger.Application.Services.SubscriptionService
+            >();
+
+            // Register Subscription Repositories
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.ISubscriptionPlanRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.SubscriptionPlanRepository
+            >();
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.IUserSubscriptionRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.UserSubscriptionRepository
+            >();
+
+            // Register Subscription Service
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.ISubscriptionService,
+                MainLedger.Application.Services.SubscriptionService
+            >();
+
             // Register SignalR
             builder.Services.AddSignalR();
 
@@ -339,6 +371,7 @@ namespace MainLedger.API
                 using var scope = app.Services.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<MailLedgerDbContext>();
                 Infrastructure.Persistence.Seed.DatabaseSeeder.SeedAsync(context).Wait();
+                Infrastructure.Seeders.SubscriptionPlanSeeder.SeedAsync(context).Wait();
                 app.UseSwagger();
                 app.UseSwaggerUI();
 

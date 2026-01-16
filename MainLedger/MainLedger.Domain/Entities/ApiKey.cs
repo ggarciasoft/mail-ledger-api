@@ -13,6 +13,7 @@ public sealed class ApiKey : Entity
     public string Name { get; private set; }
     public string[] Scopes { get; private set; }
     public bool IsActive { get; private set; }
+    public bool IsRevoked { get; private set; }
     public DateTime? ExpiresAt { get; private set; }
     public DateTime? LastUsedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }

@@ -15,6 +15,7 @@ public class GmailController : ControllerBase
     private readonly IGmailService _gmailService;
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly ILogger<GmailController> _logger;
     private readonly MainLedger.Application.Common.Interfaces.IJobManagementService _jobManagementService;
 
@@ -22,6 +23,7 @@ public class GmailController : ControllerBase
         IGmailService gmailService,
         IMediator mediator,
         ICurrentUserService currentUserService,
+        ISubscriptionService subscriptionService,
         ILogger<GmailController> logger,
         MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService
     )
@@ -29,6 +31,7 @@ public class GmailController : ControllerBase
         _gmailService = gmailService;
         _mediator = mediator;
         _currentUserService = currentUserService;
+        _subscriptionService = subscriptionService;
         _logger = logger;
         _jobManagementService = jobManagementService;
     }
@@ -68,6 +71,21 @@ public class GmailController : ControllerBase
 
         try
         {
+            // Check subscription limits
+            var canConnect = await _subscriptionService.CanConnectGmailAccountAsync(
+                userId,
+                cancellationToken
+            );
+            if (!canConnect)
+            {
+                return BadRequest(
+                    new
+                    {
+                        error = "Gmail account limit reached for your subscription plan. Please upgrade to connect more accounts.",
+                    }
+                );
+            }
+
             var connection = await _gmailService.HandleCallbackAsync(
                 userId,
                 code,

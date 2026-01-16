@@ -17,19 +17,32 @@ public class GmailConnectionRepository : IGmailConnectionRepository
         _context = context;
     }
 
-    public async Task<GmailConnection?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<GmailConnection?> GetByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.GmailConnections
-            .FirstOrDefaultAsync(g => g.UserId == userId, cancellationToken);
+        return await _context.GmailConnections.FirstOrDefaultAsync(
+            g => g.UserId == userId,
+            cancellationToken
+        );
     }
 
-    public async Task<GmailConnection?> GetActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<GmailConnection?> GetActiveByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.GmailConnections
-            .FirstOrDefaultAsync(g => g.UserId == userId && g.IsActive, cancellationToken);
+        return await _context.GmailConnections.FirstOrDefaultAsync(
+            g => g.UserId == userId && g.IsActive,
+            cancellationToken
+        );
     }
 
-    public async Task AddAsync(GmailConnection connection, CancellationToken cancellationToken = default)
+    public async Task AddAsync(
+        GmailConnection connection,
+        CancellationToken cancellationToken = default
+    )
     {
         await _context.GmailConnections.AddAsync(connection, cancellationToken);
     }
@@ -37,5 +50,16 @@ public class GmailConnectionRepository : IGmailConnectionRepository
     public void Update(GmailConnection connection)
     {
         _context.GmailConnections.Update(connection);
+    }
+
+    public async Task<int> CountByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.GmailConnections.CountAsync(
+            g => g.UserId == userId && g.IsActive,
+            cancellationToken
+        );
     }
 }

@@ -14,4 +14,5 @@ public interface IApiKeyRepository
     Task AddAsync(ApiKey apiKey, CancellationToken cancellationToken = default);
     Task UpdateAsync(ApiKey apiKey, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<int> CountByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
 }

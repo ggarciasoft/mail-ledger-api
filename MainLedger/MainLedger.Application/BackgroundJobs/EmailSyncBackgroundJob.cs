@@ -20,6 +20,7 @@ public class EmailSyncBackgroundJob
     private readonly IProcessingJobRepository _jobRepository;
     private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IJobNotificationService _jobNotificationService;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<EmailSyncBackgroundJob> _logger;
 
@@ -32,6 +33,7 @@ public class EmailSyncBackgroundJob
         IProcessingJobRepository jobRepository,
         IGmailSyncHistoryRepository syncHistoryRepository,
         IJobNotificationService jobNotificationService,
+        ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
         ILogger<EmailSyncBackgroundJob> logger
     )
@@ -44,6 +46,7 @@ public class EmailSyncBackgroundJob
         _jobRepository = jobRepository;
         _syncHistoryRepository = syncHistoryRepository;
         _jobNotificationService = jobNotificationService;
+        _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -99,6 +102,22 @@ public class EmailSyncBackgroundJob
                 maxEmails,
                 cancellationToken
             );
+
+            // Check subscription limits
+            var canProcessEmails = await _subscriptionService.CanProcessEmailAsync(
+                userId,
+                cancellationToken
+            );
+            if (!canProcessEmails)
+            {
+                job.Fail(
+                    "Monthly email processing limit reached. Please upgrade your subscription."
+                );
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _jobNotificationService.NotifyJobFailed(userId, job);
+                _logger.LogWarning("User {UserId} has reached their monthly email limit", userId);
+                return;
+            }
 
             job.Start(fetchedEmails.Count);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -156,6 +175,12 @@ public class EmailSyncBackgroundJob
                     {
                         await _emailRepository.AddAsync(email, cancellationToken);
                         savedCount++;
+
+                        // Increment subscription email count
+                        await _subscriptionService.IncrementEmailCountAsync(
+                            userId,
+                            cancellationToken
+                        );
                     }
                     else
                     {

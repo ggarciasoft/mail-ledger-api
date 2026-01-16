@@ -31,6 +31,10 @@ public class MailLedgerDbContext : DbContext
     public DbSet<WorkflowConfiguration> WorkflowConfigurations => Set<WorkflowConfiguration>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
 
+    // Subscription entities
+    public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+    public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
