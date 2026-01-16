@@ -74,6 +74,8 @@ public class SubscriptionPlan : Entity
         MaxWebhooks = maxWebhooks;
         CanUseBulkOperations = canUseBulkOperations;
         IsActive = true;
+        CreatedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Deactivate()

@@ -62,7 +62,7 @@ public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<Subscripti
 
         builder.Property(p => p.CreatedAt).HasColumnName("created_at").IsRequired();
 
-        builder.Property(p => p.UpdatedAt).HasColumnName("updated_at").IsRequired();
+        builder.Property(p => p.UpdatedAt).HasColumnName("updated_at");
 
         // Indexes
         builder.HasIndex(p => p.Name).IsUnique();

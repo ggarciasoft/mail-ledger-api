@@ -3,6 +3,7 @@ using System;
 using MainLedger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MainLedger.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MailLedgerDbContext))]
-    partial class MailLedgerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260116021220_RemoveRequiredUpdatedAtSubscriptionSystem")]
+    partial class RemoveRequiredUpdatedAtSubscriptionSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -189,75 +192,6 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                     b.ToTable("ContactMessages");
                 });
 
-            modelBuilder.Entity("MainLedger.Domain.Entities.EmailConnection", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("ConnectedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("connected_at");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("email");
-
-                    b.Property<string>("EncryptedAccessToken")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("encrypted_access_token");
-
-                    b.Property<string>("EncryptedRefreshToken")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("encrypted_refresh_token");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<DateTime?>("LastSyncedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_synced_at");
-
-                    b.Property<int>("Provider")
-                        .HasColumnType("integer")
-                        .HasColumnName("provider");
-
-                    b.Property<DateTime>("TokenExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("token_expires_at");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsActive")
-                        .HasDatabaseName("ix_email_connections_is_active");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_email_connections_user_id");
-
-                    b.HasIndex("UserId", "Provider")
-                        .IsUnique()
-                        .HasDatabaseName("ix_email_connections_user_provider");
-
-                    b.ToTable("email_connections", (string)null);
-                });
-
             modelBuilder.Entity("MainLedger.Domain.Entities.EmailMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -301,9 +235,6 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("directive_reason");
-
-                    b.Property<Guid?>("EmailConnectionId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("From")
                         .IsRequired()
@@ -375,8 +306,6 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Directive")
                         .HasDatabaseName("ix_email_messages_directive");
-
-                    b.HasIndex("EmailConnectionId");
 
                     b.HasIndex("IsFinancial")
                         .HasDatabaseName("ix_email_messages_is_financial");
@@ -1295,31 +1224,13 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("MainLedger.Domain.Entities.EmailConnection", b =>
-                {
-                    b.HasOne("MainLedger.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("MainLedger.Domain.Entities.EmailMessage", b =>
                 {
-                    b.HasOne("MainLedger.Domain.Entities.EmailConnection", "EmailConnection")
-                        .WithMany("EmailMessages")
-                        .HasForeignKey("EmailConnectionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("MainLedger.Domain.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("EmailConnection");
                 });
 
             modelBuilder.Entity("MainLedger.Domain.Entities.EmailVerificationToken", b =>
@@ -1565,11 +1476,6 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("MainLedger.Domain.Entities.EmailConnection", b =>
-                {
-                    b.Navigation("EmailMessages");
                 });
 
             modelBuilder.Entity("MainLedger.Domain.Entities.SubscriptionPlan", b =>

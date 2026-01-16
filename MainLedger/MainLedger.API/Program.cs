@@ -109,6 +109,7 @@ namespace MainLedger.API
             builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             builder.Services.AddScoped<IProcessingJobRepository, ProcessingJobRepository>();
             builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
+            builder.Services.AddScoped<IEmailConnectionRepository, EmailConnectionRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register HTTP Context Accessor (required for CurrentUserService)
@@ -261,6 +262,27 @@ namespace MainLedger.API
                 MainLedger.Integrations.Services.GmailService
             >();
 
+            // Register Outlook Integration
+            builder.Services.Configure<MainLedger.Domain.Settings.OutlookSettings>(
+                builder.Configuration.GetSection("Outlook")
+            );
+
+            builder.Services.AddSingleton(sp =>
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MainLedger.Domain.Settings.OutlookSettings>>().Value
+            );
+
+            // Register Email Providers
+            builder.Services.AddScoped<
+                MainLedger.Domain.Services.IEmailProvider,
+                MainLedger.Integrations.Services.OutlookEmailProvider
+            >();
+
+            // Register Email Provider Factory
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IEmailProviderFactory,
+                MainLedger.Application.Services.EmailProviderFactory
+            >();
+
             builder.Services.AddScoped<
                 Domain.Services.IPasswordHasher,
                 MainLedger.Infrastructure.Security.PasswordHasher
@@ -400,7 +422,7 @@ namespace MainLedger.API
             app.MapControllers();
 
             // Map SignalR Hub
-            app.MapHub<MainLedger.API.Hubs.JobHub>("/hubs/jobs");
+            app.MapHub<MainLedger.API.Hubs.JobHub>("/api/hubs/jobs");
 
             app.Run();
         }

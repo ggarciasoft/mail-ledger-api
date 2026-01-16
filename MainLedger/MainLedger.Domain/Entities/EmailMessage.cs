@@ -36,6 +36,8 @@ public sealed class EmailMessage : Entity
     
     public DateTime CreatedAt { get; private set; }
 
+    public EmailConnection? EmailConnection { get; private set; }
+
     private EmailMessage(
         Guid id,
         string messageId,

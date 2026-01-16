@@ -36,6 +36,18 @@ public class EmailMessageRepository : IEmailMessageRepository
         );
     }
 
+    public async Task<EmailMessage?> GetByProviderMessageIdAsync(
+        string providerMessageId,
+        Domain.Enums.EmailProvider provider,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.EmailMessages.FirstOrDefaultAsync(
+            e => e.MessageId == providerMessageId,
+            cancellationToken
+        );
+    }
+
     public async Task<bool> ExistsByContentHashAsync(
         string contentHash,
         CancellationToken cancellationToken = default

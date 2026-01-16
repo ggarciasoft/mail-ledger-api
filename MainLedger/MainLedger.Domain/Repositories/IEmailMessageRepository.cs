@@ -12,6 +12,11 @@ public interface IEmailMessageRepository
         string messageId,
         CancellationToken cancellationToken = default
     );
+    Task<EmailMessage?> GetByProviderMessageIdAsync(
+        string providerMessageId,
+        Enums.EmailProvider provider,
+        CancellationToken cancellationToken = default
+    );
     Task<bool> ExistsByContentHashAsync(
         string contentHash,
         CancellationToken cancellationToken = default
