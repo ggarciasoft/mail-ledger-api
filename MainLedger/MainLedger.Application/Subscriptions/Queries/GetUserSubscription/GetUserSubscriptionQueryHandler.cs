@@ -37,7 +37,7 @@ public class GetUserSubscriptionQueryHandler
                 subscription.SubscriptionPlan.Description,
                 subscription.SubscriptionPlan.MonthlyPrice,
                 subscription.SubscriptionPlan.MonthlyEmailLimit,
-                subscription.SubscriptionPlan.MaxGmailAccounts,
+                subscription.SubscriptionPlan.MaxEmailAccounts,
                 subscription.SubscriptionPlan.MaxApiKeys,
                 subscription.SubscriptionPlan.HistoryRetentionDays,
                 subscription.SubscriptionPlan.CanExport,

@@ -237,7 +237,7 @@ public class EmailMessageRepository : IEmailMessageRepository
     {
         // Get sync history from the GmailSyncHistory table
         var syncHistory = await _context
-            .GmailSyncHistories.Where(s => s.UserId == userId && s.SyncCompletedAt != null)
+            .EmailSyncHistories.Where(s => s.UserId == userId && s.SyncCompletedAt != null)
             .OrderByDescending(s => s.SyncStartedAt)
             .Take(limit)
             .Select(s => new Domain.Models.SyncHistoryItem

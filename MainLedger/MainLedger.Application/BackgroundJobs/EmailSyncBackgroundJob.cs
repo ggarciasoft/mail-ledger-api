@@ -13,12 +13,12 @@ namespace MainLedger.Application.BackgroundJobs;
 public class EmailSyncBackgroundJob
 {
     private readonly IGmailService _gmailService;
-    private readonly IGmailConnectionRepository _connectionRepository;
+    private readonly IEmailConnectionRepository _connectionRepository;
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
     private readonly IProcessingJobRepository _jobRepository;
-    private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
+    private readonly IEmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IJobNotificationService _jobNotificationService;
     private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
@@ -26,12 +26,12 @@ public class EmailSyncBackgroundJob
 
     public EmailSyncBackgroundJob(
         IGmailService gmailService,
-        IGmailConnectionRepository connectionRepository,
+        IEmailConnectionRepository connectionRepository,
         IEmailMessageRepository emailRepository,
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
         IProcessingJobRepository jobRepository,
-        IGmailSyncHistoryRepository syncHistoryRepository,
+        IEmailSyncHistoryRepository syncHistoryRepository,
         IJobNotificationService jobNotificationService,
         ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
@@ -74,9 +74,9 @@ public class EmailSyncBackgroundJob
                 userId
             );
 
-            var connection = await _connectionRepository.GetActiveByUserIdAsync(
+            var connection = await _connectionRepository.GetByUserAndProviderAsync(
                 userId,
-                cancellationToken
+                EmailProvider.Gmail
             );
             if (connection == null)
             {
@@ -88,8 +88,8 @@ public class EmailSyncBackgroundJob
             // Load user's active rules
             var rules = await _ruleRepository.GetActiveByUserIdAsync(userId, cancellationToken);
 
-            // Create sync history record
-            var syncHistory = GmailSyncHistory.Create(userId, connection.HistoryId);
+            // Create sync history record (EmailConnection doesn't have HistoryId, so we pass null)
+            var syncHistory = EmailSyncHistory.Create(userId, EmailProvider.Gmail, null);
             await _syncHistoryRepository.AddAsync(syncHistory, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -213,8 +213,8 @@ public class EmailSyncBackgroundJob
             // Update connection last sync time
             if (fetchedEmails.Count > 0)
             {
-                connection.UpdateLastSync(DateTime.UtcNow, connection.HistoryId ?? string.Empty);
-                _connectionRepository.Update(connection);
+                connection.LastSyncedAt = DateTime.UtcNow;
+                await _connectionRepository.UpdateAsync(connection);
             }
 
             // Final update

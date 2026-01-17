@@ -21,7 +21,7 @@ public class SubscriptionPlan : Entity
     public int MonthlyEmailLimit { get; private set; }
 
     // Connection limits
-    public int MaxGmailAccounts { get; private set; }
+    public int MaxEmailAccounts { get; private set; }
     public int MaxApiKeys { get; private set; }
 
     // Data retention
@@ -50,7 +50,7 @@ public class SubscriptionPlan : Entity
         string description,
         decimal monthlyPrice,
         int monthlyEmailLimit,
-        int maxGmailAccounts,
+        int maxEmailAccounts,
         int maxApiKeys,
         int historyRetentionDays,
         bool canExport,
@@ -65,7 +65,7 @@ public class SubscriptionPlan : Entity
         Description = description;
         MonthlyPrice = monthlyPrice;
         MonthlyEmailLimit = monthlyEmailLimit;
-        MaxGmailAccounts = maxGmailAccounts;
+        MaxEmailAccounts = maxEmailAccounts;
         MaxApiKeys = maxApiKeys;
         HistoryRetentionDays = historyRetentionDays;
         CanExport = canExport;

@@ -23,21 +23,21 @@ public record SyncResult
 public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsCommand, SyncResult>
 {
     private readonly IGmailService _gmailService;
-    private readonly IGmailConnectionRepository _connectionRepository;
+    private readonly IEmailConnectionRepository _connectionRepository;
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IRuleRepository _ruleRepository;
     private readonly IRulesEngine _rulesEngine;
-    private readonly IGmailSyncHistoryRepository _syncHistoryRepository;
+    private readonly IEmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<SyncGmailEmailsCommandHandler> _logger;
 
     public SyncGmailEmailsCommandHandler(
         IGmailService gmailService,
-        IGmailConnectionRepository connectionRepository,
+        IEmailConnectionRepository connectionRepository,
         IEmailMessageRepository emailRepository,
         IRuleRepository ruleRepository,
         IRulesEngine rulesEngine,
-        IGmailSyncHistoryRepository syncHistoryRepository,
+        IEmailSyncHistoryRepository syncHistoryRepository,
         IUnitOfWork unitOfWork,
         ILogger<SyncGmailEmailsCommandHandler> logger
     )
@@ -57,9 +57,9 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         CancellationToken cancellationToken
     )
     {
-        var connection = await _connectionRepository.GetActiveByUserIdAsync(
+        var connection = await _connectionRepository.GetByUserAndProviderAsync(
             request.UserId,
-            cancellationToken
+            EmailProvider.Gmail
         );
         if (connection == null)
         {
@@ -70,9 +70,9 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         var rules = await _ruleRepository.GetActiveByUserIdAsync(request.UserId, cancellationToken);
 
         // Create sync history record
-        var syncHistory = Domain.Entities.GmailSyncHistory.Create(
+        var syncHistory = Domain.Entities.EmailSyncHistory.Create(
             request.UserId,
-            connection.HistoryId
+            EmailProvider.Gmail
         );
         await _syncHistoryRepository.AddAsync(syncHistory, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -161,10 +161,9 @@ public class SyncGmailEmailsCommandHandler : IRequestHandler<SyncGmailEmailsComm
         // Update connection last sync time
         if (fetchedEmails.Count > 0)
         {
-            // We'd ideally get the latest historyId from the API response to store here
-            // For now, just update the timestamp
-            connection.UpdateLastSync(DateTime.UtcNow, connection.HistoryId ?? string.Empty);
-            _connectionRepository.Update(connection);
+            // Update last sync time
+            connection.LastSyncedAt = DateTime.UtcNow;
+            await _connectionRepository.UpdateAsync(connection);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);

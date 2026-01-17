@@ -10,19 +10,19 @@ namespace MainLedger.Application.Gmail.Queries;
 public class GetSyncHistoryQueryHandler : IRequestHandler<GetSyncHistoryQuery, SyncHistoryDto>
 {
     private readonly IEmailMessageRepository _emailMessageRepository;
-    private readonly IGmailConnectionRepository _gmailConnectionRepository;
+    private readonly IEmailConnectionRepository _emailConnectionRepository;
 
     public GetSyncHistoryQueryHandler(
         IEmailMessageRepository emailMessageRepository,
-        IGmailConnectionRepository gmailConnectionRepository)
+        IEmailConnectionRepository emailConnectionRepository)
     {
         _emailMessageRepository = emailMessageRepository;
-        _gmailConnectionRepository = gmailConnectionRepository;
+        _emailConnectionRepository = emailConnectionRepository;
     }
 
     public async Task<SyncHistoryDto> Handle(GetSyncHistoryQuery request, CancellationToken cancellationToken)
     {
-        var connection = await _gmailConnectionRepository.GetByUserIdAsync(request.UserId, cancellationToken);
+        var connection = await _emailConnectionRepository.GetByUserIdAsync(request.UserId);
 
         // Get sync history by grouping emails by the date they were created (ingested)
         var syncHistory = await _emailMessageRepository.GetSyncHistoryAsync(request.UserId, request.Limit, cancellationToken);
@@ -33,7 +33,7 @@ public class GetSyncHistoryQueryHandler : IRequestHandler<GetSyncHistoryQuery, S
                 EmailsProcessed: s.EmailCount,
                 Status: "Completed"
             )).ToList(),
-            LastSuccessfulSync: connection?.LastSyncedAt,
+            LastSuccessfulSync: connection.Max(o => o.LastSyncedAt),
             TotalSyncs: syncHistory.Count
         );
     }

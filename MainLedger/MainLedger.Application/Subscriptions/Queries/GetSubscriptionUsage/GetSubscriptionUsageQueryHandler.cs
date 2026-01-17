@@ -1,5 +1,6 @@
 using MainLedger.Application.Common.Interfaces;
 using MainLedger.Contracts.Subscriptions;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
 using MediatR;
 
@@ -10,17 +11,17 @@ public class GetSubscriptionUsageQueryHandler
 {
     private readonly ISubscriptionService _subscriptionService;
     private readonly IApiKeyRepository _apiKeyRepository;
-    private readonly IGmailConnectionRepository _gmailConnectionRepository;
+    private readonly IEmailConnectionRepository _emailConnectionRepository;
 
     public GetSubscriptionUsageQueryHandler(
         ISubscriptionService subscriptionService,
         IApiKeyRepository apiKeyRepository,
-        IGmailConnectionRepository gmailConnectionRepository
+        IEmailConnectionRepository emailConnectionRepository
     )
     {
         _subscriptionService = subscriptionService;
         _apiKeyRepository = apiKeyRepository;
-        _gmailConnectionRepository = gmailConnectionRepository;
+        _emailConnectionRepository = emailConnectionRepository;
     }
 
     public async Task<SubscriptionUsageDto> Handle(
@@ -41,16 +42,17 @@ public class GetSubscriptionUsageQueryHandler
             request.UserId,
             cancellationToken
         );
-        var gmailAccountsCount = await _gmailConnectionRepository.CountByUserIdAsync(
+        var emailAccountsCount = await _emailConnectionRepository.CountByUserAndProviderAsync(
             request.UserId,
+            EmailProvider.Gmail,
             cancellationToken
         );
 
         return new SubscriptionUsageDto(
             emailsProcessed,
             emailLimit,
-            gmailAccountsCount,
-            limits.MaxGmailAccounts,
+            emailAccountsCount,
+            limits.MaxEmailAccounts,
             apiKeysCount,
             limits.MaxApiKeys
         );

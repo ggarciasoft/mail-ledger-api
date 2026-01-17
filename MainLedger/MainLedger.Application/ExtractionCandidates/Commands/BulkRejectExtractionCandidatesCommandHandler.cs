@@ -1,3 +1,4 @@
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Contracts.ExtractionCandidates;
 using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
@@ -14,18 +15,21 @@ public class BulkRejectExtractionCandidatesCommandHandler
 {
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IEmailMessageRepository _emailRepository;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<BulkRejectExtractionCandidatesCommandHandler> _logger;
 
     public BulkRejectExtractionCandidatesCommandHandler(
         IExtractionCandidateRepository candidateRepository,
         IEmailMessageRepository emailRepository,
+        ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
         ILogger<BulkRejectExtractionCandidatesCommandHandler> logger
     )
     {
         _candidateRepository = candidateRepository;
         _emailRepository = emailRepository;
+        _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -55,6 +59,18 @@ public class BulkRejectExtractionCandidatesCommandHandler
         if (request.CandidateIds.Count > 100)
         {
             throw new InvalidOperationException("Cannot process more than 100 candidates at once");
+        }
+
+        // Check subscription limits
+        var canUseBulkOperations = await _subscriptionService.CanUseBulkOperationsAsync(
+            request.UserId,
+            cancellationToken
+        );
+        if (!canUseBulkOperations)
+        {
+            throw new InvalidOperationException(
+                "Bulk operations are not available on your current subscription plan. Please upgrade to use this feature."
+            );
         }
 
         var succeeded = 0;

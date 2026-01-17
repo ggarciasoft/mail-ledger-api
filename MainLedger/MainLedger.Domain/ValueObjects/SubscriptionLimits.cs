@@ -8,7 +8,7 @@ namespace MainLedger.Domain.ValueObjects;
 public class SubscriptionLimits
 {
     public int MonthlyEmailLimit { get; }
-    public int MaxGmailAccounts { get; }
+    public int MaxEmailAccounts { get; }
     public int MaxApiKeys { get; }
     public int HistoryRetentionDays { get; }
     public bool CanExport { get; }
@@ -30,7 +30,7 @@ public class SubscriptionLimits
     )
     {
         MonthlyEmailLimit = monthlyEmailLimit;
-        MaxGmailAccounts = maxGmailAccounts;
+        MaxEmailAccounts = maxGmailAccounts;
         MaxApiKeys = maxApiKeys;
         HistoryRetentionDays = historyRetentionDays;
         CanExport = canExport;
@@ -44,7 +44,7 @@ public class SubscriptionLimits
     {
         return new SubscriptionLimits(
             plan.MonthlyEmailLimit,
-            plan.MaxGmailAccounts,
+            plan.MaxEmailAccounts,
             plan.MaxApiKeys,
             plan.HistoryRetentionDays,
             plan.CanExport,

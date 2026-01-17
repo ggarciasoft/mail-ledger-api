@@ -3,6 +3,7 @@ using System;
 using MainLedger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MainLedger.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MailLedgerDbContext))]
-    partial class MailLedgerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260116230601_AddEmailSyncHistoryTable")]
+    partial class AddEmailSyncHistoryTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -723,6 +726,41 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                     b.ToTable("financial_records", (string)null);
                 });
 
+            modelBuilder.Entity("MainLedger.Domain.Entities.GmailSyncHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EmailsFound")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EmailsProcessed")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastHistoryId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SyncCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("SyncStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GmailSyncHistories");
+                });
+
             modelBuilder.Entity("MainLedger.Domain.Entities.PasswordResetToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -983,9 +1021,9 @@ namespace MainLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("max_api_keys");
 
-                    b.Property<int>("MaxEmailAccounts")
+                    b.Property<int>("MaxGmailAccounts")
                         .HasColumnType("integer")
-                        .HasColumnName("max_email_accounts");
+                        .HasColumnName("max_gmail_accounts");
 
                     b.Property<int>("MaxWebhooks")
                         .HasColumnType("integer")

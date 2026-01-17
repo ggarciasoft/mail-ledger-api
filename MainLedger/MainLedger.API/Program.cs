@@ -86,7 +86,6 @@ namespace MainLedger.API
 
             // Register repositories
             builder.Services.AddScoped<IUserRepository, UserRepository>();
-            builder.Services.AddScoped<IGmailConnectionRepository, GmailConnectionRepository>();
             builder.Services.AddScoped<IEmailMessageRepository, EmailMessageRepository>();
             builder.Services.AddScoped<IRuleRepository, RuleRepository>();
             builder.Services.AddScoped<IFinancialRecordRepository, FinancialRecordRepository>();
@@ -96,7 +95,7 @@ namespace MainLedger.API
                 ExtractionCandidateRepository
             >();
             builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
-            builder.Services.AddScoped<IGmailSyncHistoryRepository, GmailSyncHistoryRepository>();
+            builder.Services.AddScoped<IEmailSyncHistoryRepository, EmailSyncHistoryRepository>();
             builder.Services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
             builder.Services.AddScoped<
                 IEmailVerificationTokenRepository,

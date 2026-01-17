@@ -33,7 +33,7 @@ public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<Subscripti
             .HasColumnName("monthly_email_limit")
             .IsRequired();
 
-        builder.Property(p => p.MaxGmailAccounts).HasColumnName("max_gmail_accounts").IsRequired();
+        builder.Property(p => p.MaxEmailAccounts).HasColumnName("max_email_accounts").IsRequired();
 
         builder.Property(p => p.MaxApiKeys).HasColumnName("max_api_keys").IsRequired();
 

@@ -58,6 +58,40 @@ public class ClassificationBackgroundJob
                 userId
             );
 
+            // Check subscription limits before fetching emails
+            int remainingEmails;
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var subscriptionService =
+                    scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                var (emailsProcessed, emailLimit) = await subscriptionService.GetEmailUsageAsync(
+                    userId,
+                    cancellationToken
+                );
+                remainingEmails = emailLimit - emailsProcessed;
+
+                if (remainingEmails <= 0)
+                {
+                    _logger.LogWarning(
+                        "User {UserId} has reached their email limit ({EmailLimit}). Skipping classification.",
+                        userId,
+                        emailLimit
+                    );
+                    job.Fail("Monthly email limit reached. Please upgrade your subscription.");
+                    using (var saveScope = _serviceProvider.CreateScope())
+                    {
+                        var unitOfWork =
+                            saveScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                        await unitOfWork.SaveChangesAsync(cancellationToken);
+                    }
+                    await _jobNotificationService.NotifyJobFailed(userId, job);
+                    return;
+                }
+            }
+
+            // Limit batch size to remaining emails
+            var effectiveBatchSize = Math.Min(batchSize, remainingEmails);
+
             // Get pending emails using a scoped repository
             List<Domain.Entities.EmailMessage> emails;
             using (var scope = _serviceProvider.CreateScope())
@@ -66,13 +100,14 @@ public class ClassificationBackgroundJob
                     scope.ServiceProvider.GetRequiredService<IEmailMessageRepository>();
                 emails = await emailRepository.GetPendingClassificationAsync(
                     userId,
-                    batchSize,
+                    effectiveBatchSize,
                     cancellationToken
                 );
             }
 
             int successCount = 0;
             int failureCount = 0;
+            int skippedCount = 0;
             int processedCount = 0;
             int lastReportedCount = 0;
 
@@ -93,19 +128,54 @@ public class ClassificationBackgroundJob
                         scope.ServiceProvider.GetRequiredService<IEmailMessageRepository>();
                     var jobRepository =
                         scope.ServiceProvider.GetRequiredService<IProcessingJobRepository>();
+                    var subscriptionService =
+                        scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
                     var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                     // Check if job has been cancelled
                     var currentJob = await jobRepository.GetByIdAsync(jobId, cancellationToken);
                     if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
                     {
-                        return (email, result: null, error: (Exception?)null, cancelled: true);
+                        return (
+                            email,
+                            result: null,
+                            error: (Exception?)null,
+                            cancelled: true,
+                            limitReached: false
+                        );
                     }
 
                     // Check cancellation token
                     if (cancellationToken.IsCancellationRequested)
                     {
-                        return (email, result: null, error: (Exception?)null, cancelled: true);
+                        return (
+                            email,
+                            result: null,
+                            error: (Exception?)null,
+                            cancelled: true,
+                            limitReached: false
+                        );
+                    }
+
+                    // Check subscription limit before processing
+                    var canProcess = await subscriptionService.CanProcessEmailAsync(
+                        userId,
+                        cancellationToken
+                    );
+                    if (!canProcess)
+                    {
+                        _logger.LogWarning(
+                            "User {UserId} has reached their email limit. Skipping email {EmailId}",
+                            userId,
+                            email.Id
+                        );
+                        return (
+                            email,
+                            result: null,
+                            error: (Exception?)null,
+                            cancelled: false,
+                            limitReached: true
+                        );
                     }
 
                     try
@@ -115,12 +185,25 @@ public class ClassificationBackgroundJob
                             cancellationToken
                         );
 
-                        return (email, result, error: (Exception?)null, cancelled: false);
+                        // Don't increment here - will do it in bulk after all processing to avoid race conditions
+                        return (
+                            email,
+                            result,
+                            error: (Exception?)null,
+                            cancelled: false,
+                            limitReached: false
+                        );
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Error classifying email {EmailId}", email.Id);
-                        return (email, result: null, error: ex, cancelled: false);
+                        return (
+                            email,
+                            result: null,
+                            error: ex,
+                            cancelled: false,
+                            limitReached: false
+                        );
                     }
                 }
                 finally
@@ -161,8 +244,18 @@ public class ClassificationBackgroundJob
                 trackedJob.Start(emails.Count);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
 
-                foreach (var (email, result, error, _) in results)
+                foreach (var (email, result, error, _, limitReached) in results)
                 {
+                    if (limitReached)
+                    {
+                        skippedCount++;
+                        _logger.LogInformation(
+                            "Email {EmailId} skipped due to subscription limit",
+                            email.Id
+                        );
+                        continue;
+                    }
+
                     if (error != null)
                     {
                         failureCount++;
@@ -199,6 +292,26 @@ public class ClassificationBackgroundJob
                 trackedJob.UpdateProgress(processedCount, successCount, failureCount);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
 
+                // Increment email count for all successfully classified emails (bulk operation to avoid race conditions)
+                if (successCount > 0)
+                {
+                    var subscriptionService =
+                        scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                    for (int i = 0; i < successCount; i++)
+                    {
+                        await subscriptionService.IncrementEmailCountAsync(
+                            userId,
+                            cancellationToken
+                        );
+                    }
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation(
+                        "Incremented email count by {SuccessCount} for user {UserId}",
+                        successCount,
+                        userId
+                    );
+                }
+
                 // Mark job as complete and save in same scope
                 trackedJob.Complete();
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -208,11 +321,12 @@ public class ClassificationBackgroundJob
             await _jobNotificationService.NotifyJobCompleted(userId, job);
 
             _logger.LogInformation(
-                "Classification job {JobId} completed with parallel processing. Processed: {ProcessedCount}, Success: {SuccessCount}, Failures: {FailureCount}",
+                "Classification job {JobId} completed with parallel processing. Processed: {ProcessedCount}, Success: {SuccessCount}, Failures: {FailureCount}, Skipped (limit): {SkippedCount}",
                 jobId,
                 processedCount,
                 successCount,
-                failureCount
+                failureCount,
+                skippedCount
             );
         }
         catch (Exception ex)

@@ -8,6 +8,11 @@ public interface IEmailConnectionRepository
     Task<EmailConnection?> GetByIdAsync(Guid id);
     Task<EmailConnection?> GetByUserAndProviderAsync(Guid userId, EmailProvider provider);
     Task<List<EmailConnection>> GetByUserIdAsync(Guid userId);
+    Task<int> CountByUserAndProviderAsync(
+        Guid userId,
+        EmailProvider provider,
+        CancellationToken cancellationToken = default
+    );
     Task<EmailConnection> AddAsync(EmailConnection connection);
     Task UpdateAsync(EmailConnection connection);
     Task DeleteAsync(Guid id);

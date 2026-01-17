@@ -1,4 +1,5 @@
 using MainLedger.Application.Authentication.Services;
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Application.Processing.Commands;
 using MainLedger.Application.Processing.Queries;
 using MainLedger.Contracts.Processing;
@@ -19,19 +20,22 @@ public class ProcessingController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<ProcessingController> _logger;
-    private readonly MainLedger.Application.Common.Interfaces.IJobManagementService _jobManagementService;
+    private readonly IJobManagementService _jobManagementService;
+    private readonly ISubscriptionService _subscriptionService;
 
     public ProcessingController(
         IMediator mediator,
         ICurrentUserService currentUserService,
         ILogger<ProcessingController> logger,
-        MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService
+        IJobManagementService jobManagementService,
+        ISubscriptionService subscriptionService
     )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
         _logger = logger;
         _jobManagementService = jobManagementService;
+        _subscriptionService = subscriptionService;
     }
 
     /// <summary>
@@ -73,6 +77,22 @@ public class ProcessingController : ControllerBase
 
         try
         {
+            // Check subscription limits before creating job
+            var canProcess = await _subscriptionService.CanProcessEmailAsync(
+                userId.Value,
+                cancellationToken
+            );
+            if (!canProcess)
+            {
+                _logger.LogWarning("User {UserId} has reached their email limit", userId.Value);
+                return BadRequest(
+                    new
+                    {
+                        error = "Monthly email limit reached. Please upgrade your subscription to process more emails.",
+                    }
+                );
+            }
+
             // Create job using service (handles validation and race condition protection)
             var job = await _jobManagementService.CreateJobAsync(
                 userId.Value,

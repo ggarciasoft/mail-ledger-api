@@ -25,7 +25,7 @@ public static class SubscriptionPlanSeeder
                 description: "Perfect for trying out MailLedger",
                 monthlyPrice: 0m,
                 monthlyEmailLimit: 100,
-                maxGmailAccounts: 1,
+                maxEmailAccounts: 1,
                 maxApiKeys: 0,
                 historyRetentionDays: 30,
                 canExport: false,
@@ -41,7 +41,7 @@ public static class SubscriptionPlanSeeder
                 description: "For individuals managing personal finances",
                 monthlyPrice: 9m,
                 monthlyEmailLimit: 1000,
-                maxGmailAccounts: 2,
+                maxEmailAccounts: 2,
                 maxApiKeys: 2,
                 historyRetentionDays: 90,
                 canExport: true,
@@ -57,7 +57,7 @@ public static class SubscriptionPlanSeeder
                 description: "For power users and small businesses",
                 monthlyPrice: 29m,
                 monthlyEmailLimit: 10000,
-                maxGmailAccounts: 5,
+                maxEmailAccounts: 5,
                 maxApiKeys: 10,
                 historyRetentionDays: 365,
                 canExport: true,
@@ -73,7 +73,7 @@ public static class SubscriptionPlanSeeder
                 description: "For large organizations with custom needs",
                 monthlyPrice: 99m,
                 monthlyEmailLimit: int.MaxValue, // Unlimited
-                maxGmailAccounts: int.MaxValue, // Unlimited
+                maxEmailAccounts: int.MaxValue, // Unlimited
                 maxApiKeys: int.MaxValue, // Unlimited
                 historyRetentionDays: int.MaxValue, // Unlimited
                 canExport: true,

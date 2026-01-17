@@ -28,7 +28,7 @@ public class GetSubscriptionPlansQueryHandler
                 p.Description,
                 p.MonthlyPrice,
                 p.MonthlyEmailLimit,
-                p.MaxGmailAccounts,
+                p.MaxEmailAccounts,
                 p.MaxApiKeys,
                 p.HistoryRetentionDays,
                 p.CanExport,

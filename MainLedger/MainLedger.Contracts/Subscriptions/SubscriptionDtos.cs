@@ -9,7 +9,7 @@ public record SubscriptionPlanDto(
     string Description,
     decimal MonthlyPrice,
     int MonthlyEmailLimit,
-    int MaxGmailAccounts,
+    int MaxEmailAccounts,
     int MaxApiKeys,
     int HistoryRetentionDays,
     bool CanExport,
@@ -40,8 +40,8 @@ public record UserSubscriptionDto(
 public record SubscriptionUsageDto(
     int EmailsProcessed,
     int EmailLimit,
-    int GmailAccountsConnected,
-    int GmailAccountsLimit,
+    int EmailAccountsConnected,
+    int EmailAccountsLimit,
     int ApiKeysCreated,
     int ApiKeysLimit
 );

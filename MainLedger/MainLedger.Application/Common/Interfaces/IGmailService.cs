@@ -22,14 +22,18 @@ public interface IGmailService
     /// <param name="code">The authorization code returned by Google.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The created or updated GmailConnection.</returns>
-    Task<GmailConnection> HandleCallbackAsync(Guid userId, string code, CancellationToken cancellationToken);
+    Task<EmailConnection> HandleCallbackAsync(
+        Guid userId,
+        string code,
+        CancellationToken cancellationToken
+    );
 
     /// <summary>
     /// Refreshes the access token for an existing connection.
     /// </summary>
     /// <param name="connection">The Gmail connection to refresh.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task RefreshTokenAsync(GmailConnection connection, CancellationToken cancellationToken);
+    Task RefreshTokenAsync(EmailConnection connection, CancellationToken cancellationToken);
 
     /// <summary>
     /// Fetches new emails from Gmail.
@@ -42,10 +46,11 @@ public interface IGmailService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A list of fetched email messages (converted to domain entities).</returns>
     Task<List<EmailMessage>> FetchEmailsAsync(
-        GmailConnection connection,
+        EmailConnection connection,
         List<Rule>? rules = null,
-        DateTime? processFrom = null, 
-        string? historyId = null, 
-        int maxResults = 50, 
-        CancellationToken cancellationToken = default);
+        DateTime? processFrom = null,
+        string? historyId = null,
+        int maxResults = 50,
+        CancellationToken cancellationToken = default
+    );
 }

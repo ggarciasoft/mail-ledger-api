@@ -1,3 +1,4 @@
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Contracts.ExtractionCandidates;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Enums;
@@ -18,6 +19,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IFinancialRecordRepository _recordRepository;
     private readonly IExtractionVersionRepository _versionRepository;
+    private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<BulkConfirmExtractionCandidatesCommandHandler> _logger;
 
@@ -26,6 +28,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
         IEmailMessageRepository emailRepository,
         IFinancialRecordRepository recordRepository,
         IExtractionVersionRepository versionRepository,
+        ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
         ILogger<BulkConfirmExtractionCandidatesCommandHandler> logger
     )
@@ -34,6 +37,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
         _emailRepository = emailRepository;
         _recordRepository = recordRepository;
         _versionRepository = versionRepository;
+        _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -63,6 +67,18 @@ public class BulkConfirmExtractionCandidatesCommandHandler
         if (request.CandidateIds.Count > 100)
         {
             throw new InvalidOperationException("Cannot process more than 100 candidates at once");
+        }
+
+        // Check subscription limits
+        var canUseBulkOperations = await _subscriptionService.CanUseBulkOperationsAsync(
+            request.UserId,
+            cancellationToken
+        );
+        if (!canUseBulkOperations)
+        {
+            throw new InvalidOperationException(
+                "Bulk operations are not available on your current subscription plan. Please upgrade to use this feature."
+            );
         }
 
         var succeeded = 0;

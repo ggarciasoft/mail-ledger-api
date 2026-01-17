@@ -1,5 +1,6 @@
 using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
 using MainLedger.Domain.ValueObjects;
 
@@ -9,19 +10,19 @@ public class SubscriptionService : ISubscriptionService
 {
     private readonly IUserSubscriptionRepository _subscriptionRepository;
     private readonly IApiKeyRepository _apiKeyRepository;
-    private readonly IGmailConnectionRepository _gmailConnectionRepository;
+    private readonly IEmailConnectionRepository _emailConnectionRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public SubscriptionService(
         IUserSubscriptionRepository subscriptionRepository,
         IApiKeyRepository apiKeyRepository,
-        IGmailConnectionRepository gmailConnectionRepository,
+        IEmailConnectionRepository emailConnectionRepository,
         IUnitOfWork unitOfWork
     )
     {
         _subscriptionRepository = subscriptionRepository;
         _apiKeyRepository = apiKeyRepository;
-        _gmailConnectionRepository = gmailConnectionRepository;
+        _emailConnectionRepository = emailConnectionRepository;
         _unitOfWork = unitOfWork;
     }
 
@@ -86,14 +87,15 @@ public class SubscriptionService : ISubscriptionService
     )
     {
         var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
-        var maxAccounts = subscription.SubscriptionPlan.MaxGmailAccounts;
+        var maxAccounts = subscription.SubscriptionPlan.MaxEmailAccounts;
 
         // Unlimited
         if (maxAccounts == int.MaxValue)
             return true;
 
-        var currentCount = await _gmailConnectionRepository.CountByUserIdAsync(
+        var currentCount = await _emailConnectionRepository.CountByUserAndProviderAsync(
             userId,
+            EmailProvider.Gmail,
             cancellationToken
         );
         return currentCount < maxAccounts;

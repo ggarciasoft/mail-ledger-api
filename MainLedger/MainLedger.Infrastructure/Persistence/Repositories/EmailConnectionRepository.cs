@@ -40,6 +40,18 @@ public class EmailConnectionRepository : IEmailConnectionRepository
             .ToListAsync();
     }
 
+    public async Task<int> CountByUserAndProviderAsync(
+        Guid userId,
+        EmailProvider provider,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.EmailConnections.CountAsync(
+            ec => ec.UserId == userId && ec.Provider == provider && ec.IsActive,
+            cancellationToken
+        );
+    }
+
     public async Task<EmailConnection> AddAsync(EmailConnection connection)
     {
         await _context.EmailConnections.AddAsync(connection);

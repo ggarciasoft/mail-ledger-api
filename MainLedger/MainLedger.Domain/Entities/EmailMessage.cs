@@ -5,7 +5,7 @@ using MainLedger.Domain.ValueObjects;
 namespace MainLedger.Domain.Entities;
 
 /// <summary>
-/// Represents an ingested email message from Gmail.
+/// Represents an ingested email message.
 /// Temporary storage for processing pipeline.
 /// </summary>
 public sealed class EmailMessage : Entity

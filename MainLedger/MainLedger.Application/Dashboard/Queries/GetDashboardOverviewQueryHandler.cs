@@ -12,21 +12,21 @@ public class GetDashboardOverviewQueryHandler
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IFinancialRecordRepository _recordRepository;
-    private readonly IGmailConnectionRepository _gmailRepository;
+    private readonly IEmailConnectionRepository _emailConnectionRepository;
     private readonly ILogger<GetDashboardOverviewQueryHandler> _logger;
 
     public GetDashboardOverviewQueryHandler(
         IEmailMessageRepository emailRepository,
         IExtractionCandidateRepository candidateRepository,
         IFinancialRecordRepository recordRepository,
-        IGmailConnectionRepository gmailRepository,
+        IEmailConnectionRepository emailConnectionRepository,
         ILogger<GetDashboardOverviewQueryHandler> logger
     )
     {
         _emailRepository = emailRepository;
         _candidateRepository = candidateRepository;
         _recordRepository = recordRepository;
-        _gmailRepository = gmailRepository;
+        _emailConnectionRepository = emailConnectionRepository;
         _logger = logger;
     }
 
@@ -69,11 +69,10 @@ public class GetDashboardOverviewQueryHandler
             : 0;
 
         // Get last sync time
-        var gmailConnection = await _gmailRepository.GetByUserIdAsync(
-            request.UserId,
-            cancellationToken
+        var gmailConnection = await _emailConnectionRepository.GetByUserIdAsync(
+            request.UserId
         );
-        var lastSyncAt = gmailConnection?.LastSyncedAt;
+        var lastSyncAt = gmailConnection.Max(o => o.LastSyncedAt);
 
         // Build recent activity (simplified - could be enhanced with actual activity tracking)
         var recentActivity = new List<RecentActivityDto>();

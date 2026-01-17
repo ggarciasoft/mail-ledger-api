@@ -19,7 +19,6 @@ namespace MainLedger.Integrations.Services;
 public class GmailService : IGmailService
 {
     private readonly GmailSettings _settings;
-    private readonly IGmailConnectionRepository _connectionRepository;
     private readonly IEmailConnectionRepository _emailConnectionRepository;
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -27,7 +26,6 @@ public class GmailService : IGmailService
 
     public GmailService(
         IOptions<GmailSettings> settings,
-        IGmailConnectionRepository connectionRepository,
         IEmailConnectionRepository emailConnectionRepository,
         IUserRepository userRepository,
         IUnitOfWork unitOfWork,
@@ -35,7 +33,6 @@ public class GmailService : IGmailService
     )
     {
         _settings = settings.Value;
-        _connectionRepository = connectionRepository;
         _emailConnectionRepository = emailConnectionRepository;
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
@@ -80,7 +77,7 @@ public class GmailService : IGmailService
         return $"{authorizationUrl}?{queryString}";
     }
 
-    public async Task<GmailConnection> HandleCallbackAsync(
+    public async Task<EmailConnection> HandleCallbackAsync(
         Guid userId,
         string code,
         CancellationToken cancellationToken
@@ -168,36 +165,22 @@ public class GmailService : IGmailService
             await _emailConnectionRepository.AddAsync(emailConnection);
         }
 
-        // Also maintain the old GmailConnection for backward compatibility with existing sync logic
-        var existingGmailConnection = await _connectionRepository.GetByUserIdAsync(
-            userId,
-            cancellationToken
-        );
-        GmailConnection gmailConnection;
-
-        if (existingGmailConnection != null)
-        {
-            existingGmailConnection.Reactivate(encryptedToken);
-            _connectionRepository.Update(existingGmailConnection);
-            gmailConnection = existingGmailConnection;
-        }
-        else
-        {
-            gmailConnection = GmailConnection.Create(
-                userId,
-                EmailAddress.Create(profile.EmailAddress),
-                encryptedToken
-            );
-            await _connectionRepository.AddAsync(gmailConnection, cancellationToken);
-        }
-
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return gmailConnection;
+        // Return the EmailConnection (either existing or newly created)
+        var finalConnection =
+            existingEmailConnection
+            ?? await _emailConnectionRepository.GetByUserAndProviderAsync(
+                userId,
+                EmailProvider.Gmail
+            );
+
+        return finalConnection
+            ?? throw new InvalidOperationException("Failed to create or retrieve email connection");
     }
 
     public async Task RefreshTokenAsync(
-        GmailConnection connection,
+        EmailConnection connection,
         CancellationToken cancellationToken
     )
     {
@@ -209,7 +192,7 @@ public class GmailService : IGmailService
     }
 
     public async Task<List<EmailMessage>> FetchEmailsAsync(
-        GmailConnection connection,
+        EmailConnection connection,
         List<Rule>? rules = null,
         DateTime? processFrom = null,
         string? historyId = null,
@@ -326,7 +309,7 @@ public class GmailService : IGmailService
     // --- Private Helpers ---
 
     private async Task<Google.Apis.Gmail.v1.GmailService> GetGoogleGmailServiceAsync(
-        GmailConnection connection,
+        EmailConnection connection,
         CancellationToken cancellationToken
     )
     {
@@ -343,7 +326,7 @@ public class GmailService : IGmailService
         );
 
         // Decrypt the stored refresh token
-        var decryptedRefreshToken = _tokenEncryption.Decrypt(connection.RefreshTokenHash);
+        var decryptedRefreshToken = _tokenEncryption.Decrypt(connection.EncryptedRefreshToken);
 
         // Reconstruct token response from stored refresh token
         // Access token is null, so it will force a refresh

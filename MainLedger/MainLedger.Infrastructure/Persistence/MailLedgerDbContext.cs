@@ -13,9 +13,8 @@ public class MailLedgerDbContext : DbContext
         : base(options) { }
 
     public DbSet<User> Users => Set<User>();
-    public DbSet<GmailConnection> GmailConnections => Set<GmailConnection>();
     public DbSet<EmailConnection> EmailConnections => Set<EmailConnection>();
-    public DbSet<GmailSyncHistory> GmailSyncHistories => Set<GmailSyncHistory>();
+    public DbSet<EmailSyncHistory> EmailSyncHistories => Set<EmailSyncHistory>();
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
     public DbSet<Rule> Rules => Set<Rule>();
     public DbSet<FinancialRecord> FinancialRecords => Set<FinancialRecord>();

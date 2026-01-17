@@ -8,12 +8,12 @@ namespace MainLedger.Application.Emails.Queries;
 public class GetEmailStatisticsQueryHandler : IRequestHandler<GetEmailStatisticsQuery, EmailStatisticsDto>
 {
     private readonly IEmailMessageRepository _emailRepository;
-    private readonly IGmailConnectionRepository _connectionRepository;
+    private readonly IEmailConnectionRepository _connectionRepository;
     private readonly ILogger<GetEmailStatisticsQueryHandler> _logger;
 
     public GetEmailStatisticsQueryHandler(
         IEmailMessageRepository emailRepository,
-        IGmailConnectionRepository connectionRepository,
+        IEmailConnectionRepository connectionRepository,
         ILogger<GetEmailStatisticsQueryHandler> logger)
     {
         _emailRepository = emailRepository;
@@ -27,8 +27,8 @@ public class GetEmailStatisticsQueryHandler : IRequestHandler<GetEmailStatistics
 
         var statistics = await _emailRepository.GetStatisticsAsync(request.UserId, cancellationToken);
         
-        // Get last sync time from Gmail connection
-        var connection = await _connectionRepository.GetActiveByUserIdAsync(request.UserId, cancellationToken);
+        // Get last sync time from Email connection
+        var connection = await _connectionRepository.GetByUserIdAsync(request.UserId);
 
         return new EmailStatisticsDto
         {
@@ -39,7 +39,7 @@ public class GetEmailStatisticsQueryHandler : IRequestHandler<GetEmailStatistics
             Failed = statistics.Failed,
             FinancialEmails = statistics.FinancialEmails,
             NonFinancialEmails = statistics.NonFinancialEmails,
-            LastSyncAt = connection?.LastSyncedAt
+            LastSyncAt = connection.Max(o => o.LastSyncedAt)
         };
     }
 }
