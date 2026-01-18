@@ -16,7 +16,12 @@ public interface IExtractionCandidateRepository
         int pageSize,
         string sortBy,
         string sortOrder,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
     Task AddAsync(ExtractionCandidate candidate, CancellationToken cancellationToken = default);
     void Update(ExtractionCandidate candidate);
+    Task<bool> HasCandidatesForEmailAsync(
+        Guid emailId,
+        CancellationToken cancellationToken = default
+    );
 }

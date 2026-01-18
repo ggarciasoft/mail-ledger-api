@@ -24,7 +24,8 @@ public class EmailsController : ControllerBase
     public EmailsController(
         IMediator mediator,
         ICurrentUserService currentUserService,
-        ILogger<EmailsController> logger)
+        ILogger<EmailsController> logger
+    )
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
@@ -42,7 +43,8 @@ public class EmailsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string sortBy = "receivedAt",
         [FromQuery] string sortOrder = "desc",
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -53,7 +55,15 @@ public class EmailsController : ControllerBase
 
         try
         {
-            var query = new GetEmailsQuery(userId.Value, status, isFinancial, page, pageSize, sortBy, sortOrder);
+            var query = new GetEmailsQuery(
+                userId.Value,
+                status,
+                isFinancial,
+                page,
+                pageSize,
+                sortBy,
+                sortOrder
+            );
             var result = await _mediator.Send(query, cancellationToken);
             return Ok(result);
         }
@@ -70,7 +80,8 @@ public class EmailsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<EmailDto>> GetEmailById(
         [FromRoute] Guid id,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -103,7 +114,8 @@ public class EmailsController : ControllerBase
     /// </summary>
     [HttpGet("statistics")]
     public async Task<ActionResult<EmailStatisticsDto>> GetStatistics(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var userId = _currentUserService.GetUserId();
         if (userId == null)
@@ -121,6 +133,99 @@ public class EmailsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting email statistics for user {UserId}", userId);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete a single email.
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteEmail(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var command = new MainLedger.Application.Emails.Commands.DeleteEmailCommand(
+                userId.Value,
+                id
+            );
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (result)
+            {
+                return NoContent();
+            }
+
+            return NotFound(new { error = "Email not found" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Unauthorized attempt to delete email {EmailId} by user {UserId}",
+                id,
+                userId
+            );
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when deleting email {EmailId}", id);
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting email {EmailId} for user {UserId}", id, userId);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Bulk delete emails.
+    /// </summary>
+    [HttpPost("bulk-delete")]
+    public async Task<ActionResult<BulkDeleteEmailsResponse>> BulkDeleteEmails(
+        [FromBody] BulkDeleteEmailsRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var command = new MainLedger.Application.Emails.Commands.BulkDeleteEmailsCommand(
+                userId.Value,
+                request.EmailIds
+            );
+            var result = await _mediator.Send(command, cancellationToken);
+
+            var response = new BulkDeleteEmailsResponse(
+                result.TotalRequested,
+                result.Succeeded,
+                result.Failed,
+                result.Errors.Select(e => new BulkDeleteEmailError(e.EmailId, e.Error)).ToList()
+            );
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error bulk deleting emails for user {UserId}", userId);
             return BadRequest(new { error = ex.Message });
         }
     }

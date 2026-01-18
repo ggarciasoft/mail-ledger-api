@@ -9,8 +9,17 @@ namespace MainLedger.Domain.Repositories;
 public interface IFinancialRecordRepository
 {
     Task<FinancialRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<List<FinancialRecord>> GetByUserIdAsync(Guid userId, RecordStatus? status = null, CancellationToken cancellationToken = default);
-    Task<List<FinancialRecord>> GetConfirmedByUserIdAsync(Guid userId, DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default);
+    Task<List<FinancialRecord>> GetByUserIdAsync(
+        Guid userId,
+        RecordStatus? status = null,
+        CancellationToken cancellationToken = default
+    );
+    Task<List<FinancialRecord>> GetConfirmedByUserIdAsync(
+        Guid userId,
+        DateTime? from = null,
+        DateTime? to = null,
+        CancellationToken cancellationToken = default
+    );
     Task<(List<FinancialRecord> Records, int TotalCount)> GetPagedAsync(
         Guid userId,
         DateTime? startDate,
@@ -24,12 +33,27 @@ public interface IFinancialRecordRepository
         int pageSize,
         string sortBy,
         string sortOrder,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
     Task<Models.FinancialRecordStatistics> GetStatisticsAsync(
         Guid userId,
         DateTime? startDate,
         DateTime? endDate,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
+    Task<List<FinancialRecord>> GetFilteredAsync(
+        Guid userId,
+        DateTime? startDate,
+        DateTime? endDate,
+        decimal? minAmount,
+        decimal? maxAmount,
+        string? merchant,
+        string? currency,
+        string? sourceBank,
+        string sortBy,
+        string sortOrder,
+        CancellationToken cancellationToken = default
+    );
     Task AddAsync(FinancialRecord record, CancellationToken cancellationToken = default);
     void Update(FinancialRecord record);
 }

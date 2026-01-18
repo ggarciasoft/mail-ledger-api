@@ -69,4 +69,5 @@ public interface IEmailMessageRepository
     );
     Task AddAsync(EmailMessage message, CancellationToken cancellationToken = default);
     void Update(EmailMessage message);
+    void Delete(EmailMessage message);
 }

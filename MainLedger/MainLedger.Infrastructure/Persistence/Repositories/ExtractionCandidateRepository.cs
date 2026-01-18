@@ -17,10 +17,15 @@ public class ExtractionCandidateRepository : IExtractionCandidateRepository
         _context = context;
     }
 
-    public async Task<ExtractionCandidate?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<ExtractionCandidate?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.ExtractionCandidates
-            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        return await _context.ExtractionCandidates.FirstOrDefaultAsync(
+            c => c.Id == id,
+            cancellationToken
+        );
     }
 
     public async Task<(List<ExtractionCandidate> Candidates, int TotalCount)> GetPagedAsync(
@@ -30,13 +35,15 @@ public class ExtractionCandidateRepository : IExtractionCandidateRepository
         int pageSize,
         string sortBy,
         string sortOrder,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         // Join with EmailMessage to filter by userId
-        var query = from candidate in _context.ExtractionCandidates
-                    join email in _context.EmailMessages on candidate.EmailMessageId equals email.Id
-                    where email.UserId == userId
-                    select candidate;
+        var query =
+            from candidate in _context.ExtractionCandidates
+            join email in _context.EmailMessages on candidate.EmailMessageId equals email.Id
+            where email.UserId == userId
+            select candidate;
 
         // Apply status filter
         if (status.HasValue)
@@ -61,7 +68,7 @@ public class ExtractionCandidateRepository : IExtractionCandidateRepository
                 : query.OrderByDescending(c => c.TransactionDate),
             _ => sortOrder.ToLowerInvariant() == "asc"
                 ? query.OrderBy(c => c.CreatedAt)
-                : query.OrderByDescending(c => c.CreatedAt)
+                : query.OrderByDescending(c => c.CreatedAt),
         };
 
         // Apply pagination
@@ -73,7 +80,10 @@ public class ExtractionCandidateRepository : IExtractionCandidateRepository
         return (candidates, totalCount);
     }
 
-    public async Task AddAsync(ExtractionCandidate candidate, CancellationToken cancellationToken = default)
+    public async Task AddAsync(
+        ExtractionCandidate candidate,
+        CancellationToken cancellationToken = default
+    )
     {
         await _context.ExtractionCandidates.AddAsync(candidate, cancellationToken);
     }
@@ -81,5 +91,16 @@ public class ExtractionCandidateRepository : IExtractionCandidateRepository
     public void Update(ExtractionCandidate candidate)
     {
         _context.ExtractionCandidates.Update(candidate);
+    }
+
+    public async Task<bool> HasCandidatesForEmailAsync(
+        Guid emailId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context.ExtractionCandidates.AnyAsync(
+            c => c.EmailMessageId == emailId,
+            cancellationToken
+        );
     }
 }

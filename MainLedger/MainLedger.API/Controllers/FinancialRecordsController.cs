@@ -168,4 +168,72 @@ public class FinancialRecordsController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Export financial records to CSV or JSON.
+    /// </summary>
+    [HttpGet("export")]
+    public async Task<IActionResult> Export(
+        [FromQuery] string format = "csv",
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] decimal? minAmount = null,
+        [FromQuery] decimal? maxAmount = null,
+        [FromQuery] string? merchant = null,
+        [FromQuery] string? currency = null,
+        [FromQuery] string? sourceBank = null,
+        [FromQuery] string sortBy = "transactionDate",
+        [FromQuery] string sortOrder = "desc",
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            _logger.LogWarning("User ID not found in authentication context");
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            // Parse format
+            var exportFormat = format.ToLower() == "json" ? ExportFormat.Json : ExportFormat.Csv;
+
+            // Convert dates to UTC
+            var startDateUtc = startDate.HasValue
+                ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc)
+                : (DateTime?)null;
+            var endDateUtc = endDate.HasValue
+                ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc)
+                : (DateTime?)null;
+
+            var query = new ExportFinancialRecordsQuery(
+                userId.Value,
+                exportFormat,
+                startDateUtc,
+                endDateUtc,
+                minAmount,
+                maxAmount,
+                merchant,
+                currency,
+                sourceBank,
+                sortBy,
+                sortOrder
+            );
+
+            var result = await _mediator.Send(query, cancellationToken);
+
+            return File(result.Content, result.ContentType, result.FileName);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "User {UserId} unauthorized to export records", userId);
+            return StatusCode(403, new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting financial records for user {UserId}", userId);
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

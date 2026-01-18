@@ -259,4 +259,9 @@ public class EmailMessageRepository : IEmailMessageRepository
     {
         _context.EmailMessages.Update(message);
     }
+
+    public void Delete(EmailMessage message)
+    {
+        _context.EmailMessages.Remove(message);
+    }
 }

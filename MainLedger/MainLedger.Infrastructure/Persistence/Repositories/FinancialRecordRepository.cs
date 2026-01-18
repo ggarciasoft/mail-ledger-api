@@ -18,38 +18,43 @@ public class FinancialRecordRepository : IFinancialRecordRepository
         _context = context;
     }
 
-    public async Task<FinancialRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<FinancialRecord?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default
+    )
     {
-        return await _context.FinancialRecords
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        return await _context.FinancialRecords.FirstOrDefaultAsync(
+            f => f.Id == id,
+            cancellationToken
+        );
     }
 
     public async Task<List<FinancialRecord>> GetByUserIdAsync(
         Guid userId,
         RecordStatus? status = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        var query = _context.FinancialRecords
-            .Where(f => f.UserId == userId);
+        var query = _context.FinancialRecords.Where(f => f.UserId == userId);
 
         if (status.HasValue)
         {
             query = query.Where(f => f.Status == status.Value);
         }
 
-        return await query
-            .OrderByDescending(f => f.TransactionDate)
-            .ToListAsync(cancellationToken);
+        return await query.OrderByDescending(f => f.TransactionDate).ToListAsync(cancellationToken);
     }
 
     public async Task<List<FinancialRecord>> GetConfirmedByUserIdAsync(
         Guid userId,
         DateTime? from = null,
         DateTime? to = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        var query = _context.FinancialRecords
-            .Where(f => f.UserId == userId && f.Status == RecordStatus.Confirmed);
+        var query = _context.FinancialRecords.Where(f =>
+            f.UserId == userId && f.Status == RecordStatus.Confirmed
+        );
 
         if (from.HasValue)
         {
@@ -61,9 +66,7 @@ public class FinancialRecordRepository : IFinancialRecordRepository
             query = query.Where(f => f.TransactionDate <= to.Value);
         }
 
-        return await query
-            .OrderByDescending(f => f.TransactionDate)
-            .ToListAsync(cancellationToken);
+        return await query.OrderByDescending(f => f.TransactionDate).ToListAsync(cancellationToken);
     }
 
     public async Task<(List<FinancialRecord> Records, int TotalCount)> GetPagedAsync(
@@ -79,11 +82,13 @@ public class FinancialRecordRepository : IFinancialRecordRepository
         int pageSize,
         string sortBy,
         string sortOrder,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         // Only show confirmed records
-        var query = _context.FinancialRecords
-            .Where(f => f.UserId == userId && f.Status == RecordStatus.Confirmed);
+        var query = _context.FinancialRecords.Where(f =>
+            f.UserId == userId && f.Status == RecordStatus.Confirmed
+        );
 
         // Apply filters
         if (startDate.HasValue)
@@ -118,7 +123,9 @@ public class FinancialRecordRepository : IFinancialRecordRepository
 
         if (!string.IsNullOrWhiteSpace(sourceBank))
         {
-            query = query.Where(f => f.SourceBank != null && f.SourceBank.Name.Contains(sourceBank));
+            query = query.Where(f =>
+                f.SourceBank != null && f.SourceBank.Name.Contains(sourceBank)
+            );
         }
 
         // Get total count before pagination
@@ -138,7 +145,7 @@ public class FinancialRecordRepository : IFinancialRecordRepository
                 : query.OrderByDescending(f => f.Type),
             _ => sortOrder.ToLowerInvariant() == "asc"
                 ? query.OrderBy(f => f.TransactionDate)
-                : query.OrderByDescending(f => f.TransactionDate)
+                : query.OrderByDescending(f => f.TransactionDate),
         };
 
         // Apply pagination
@@ -150,14 +157,93 @@ public class FinancialRecordRepository : IFinancialRecordRepository
         return (records, totalCount);
     }
 
+    public async Task<List<FinancialRecord>> GetFilteredAsync(
+        Guid userId,
+        DateTime? startDate,
+        DateTime? endDate,
+        decimal? minAmount,
+        decimal? maxAmount,
+        string? merchant,
+        string? currency,
+        string? sourceBank,
+        string sortBy,
+        string sortOrder,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // Only show confirmed records
+        var query = _context.FinancialRecords.Where(f =>
+            f.UserId == userId && f.Status == RecordStatus.Confirmed
+        );
+
+        // Apply filters
+        if (startDate.HasValue)
+        {
+            query = query.Where(f => f.TransactionDate >= startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(f => f.TransactionDate <= endDate.Value);
+        }
+
+        if (minAmount.HasValue)
+        {
+            query = query.Where(f => f.Amount.Amount >= minAmount.Value);
+        }
+
+        if (maxAmount.HasValue)
+        {
+            query = query.Where(f => f.Amount.Amount <= maxAmount.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(merchant))
+        {
+            query = query.Where(f => f.Merchant != null && f.Merchant.Contains(merchant));
+        }
+
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            query = query.Where(f => f.Amount.Currency.ToString() == currency);
+        }
+
+        if (!string.IsNullOrWhiteSpace(sourceBank))
+        {
+            query = query.Where(f =>
+                f.SourceBank != null && f.SourceBank.Name.Contains(sourceBank)
+            );
+        }
+
+        // Apply sorting
+        query = sortBy.ToLowerInvariant() switch
+        {
+            "amount" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(f => f.Amount.Amount)
+                : query.OrderByDescending(f => f.Amount.Amount),
+            "merchant" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(f => f.Merchant)
+                : query.OrderByDescending(f => f.Merchant),
+            "type" => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(f => f.Type)
+                : query.OrderByDescending(f => f.Type),
+            _ => sortOrder.ToLowerInvariant() == "asc"
+                ? query.OrderBy(f => f.TransactionDate)
+                : query.OrderByDescending(f => f.TransactionDate),
+        };
+
+        return await query.ToListAsync(cancellationToken);
+    }
+
     public async Task<Domain.Models.FinancialRecordStatistics> GetStatisticsAsync(
         Guid userId,
         DateTime? startDate,
         DateTime? endDate,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        var query = _context.FinancialRecords
-            .Where(f => f.UserId == userId && f.Status == RecordStatus.Confirmed);
+        var query = _context.FinancialRecords.Where(f =>
+            f.UserId == userId && f.Status == RecordStatus.Confirmed
+        );
 
         if (startDate.HasValue)
         {
@@ -192,7 +278,7 @@ public class FinancialRecordRepository : IFinancialRecordRepository
             {
                 Month = $"{g.Key.Year}-{g.Key.Month:D2}",
                 Count = g.Count(),
-                Total = g.Sum(r => r.Amount.Amount)
+                Total = g.Sum(r => r.Amount.Amount),
             })
             .OrderBy(t => t.Month)
             .ToList();
@@ -204,11 +290,14 @@ public class FinancialRecordRepository : IFinancialRecordRepository
             AverageAmount = averageAmount,
             ByType = byType,
             ByBank = byBank,
-            MonthlyTrend = monthlyTrend
+            MonthlyTrend = monthlyTrend,
         };
     }
 
-    public async Task AddAsync(FinancialRecord record, CancellationToken cancellationToken = default)
+    public async Task AddAsync(
+        FinancialRecord record,
+        CancellationToken cancellationToken = default
+    )
     {
         await _context.FinancialRecords.AddAsync(record, cancellationToken);
     }
