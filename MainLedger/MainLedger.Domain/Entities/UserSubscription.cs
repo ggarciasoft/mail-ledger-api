@@ -36,6 +36,8 @@ public class UserSubscription : Entity
         EmailsProcessedThisMonth = 0;
         CurrentPeriodStart = DateTime.UtcNow;
         CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1);
+        CreatedAt = DateTime.UtcNow;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void IncrementEmailCount()

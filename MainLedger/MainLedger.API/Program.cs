@@ -420,6 +420,13 @@ namespace MainLedger.API
                         Authorization = new[] { new HangfireAuthorizationFilter() },
                     }
                 );
+
+                // Configure recurring jobs
+                Hangfire.RecurringJob.AddOrUpdate<MainLedger.Application.BackgroundJobs.EmailSendingBackgroundJob>(
+                    "process-email-queue",
+                    job => job.ExecuteAsync(CancellationToken.None),
+                    Hangfire.Cron.Minutely
+                );
             }
 
             app.UseHttpsRedirection();

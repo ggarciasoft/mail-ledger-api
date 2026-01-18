@@ -54,6 +54,11 @@ public class UserSubscriptionRepository : IUserSubscriptionRepository
         _context.UserSubscriptions.Add(subscription);
     }
 
+    public async Task AddAsync(UserSubscription subscription, CancellationToken cancellationToken = default)
+    {
+        await _context.UserSubscriptions.AddAsync(subscription, cancellationToken);
+    }
+
     public void Update(UserSubscription subscription)
     {
         _context.UserSubscriptions.Update(subscription);

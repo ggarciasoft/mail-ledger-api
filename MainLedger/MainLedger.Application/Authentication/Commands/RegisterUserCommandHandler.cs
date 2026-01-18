@@ -13,6 +13,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
 {
     private readonly IUserRepository _userRepository;
     private readonly IEmailVerificationTokenRepository _tokenRepository;
+    private readonly IUserSubscriptionRepository _userSubscriptionRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenGenerator _tokenGenerator;
     private readonly IUnitOfWork _unitOfWork;
@@ -22,6 +23,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
     public RegisterUserCommandHandler(
         IUserRepository userRepository,
         IEmailVerificationTokenRepository tokenRepository,
+        IUserSubscriptionRepository userSubscriptionRepository,
         IPasswordHasher passwordHasher,
         ITokenGenerator tokenGenerator,
         IUnitOfWork unitOfWork,
@@ -31,6 +33,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
     {
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
+        _userSubscriptionRepository = userSubscriptionRepository;
         _passwordHasher = passwordHasher;
         _tokenGenerator = tokenGenerator;
         _unitOfWork = unitOfWork;
@@ -69,6 +72,11 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
         // Save user and token
         await _userRepository.AddAsync(user, cancellationToken);
         await _tokenRepository.AddAsync(emailVerificationToken, cancellationToken);
+
+        // Create Free tier subscription for new user
+        var userSubscription = new UserSubscription(user.Id, SubscriptionPlan.FreePlanId);
+        await _userSubscriptionRepository.AddAsync(userSubscription, cancellationToken);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

@@ -16,5 +16,6 @@ public interface IUserSubscriptionRepository
         CancellationToken cancellationToken = default
     );
     void Add(UserSubscription subscription);
+    Task AddAsync(UserSubscription subscription, CancellationToken cancellationToken = default);
     void Update(UserSubscription subscription);
 }
