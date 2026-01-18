@@ -6,4 +6,7 @@ public enum EmailType
     PasswordReset = 2,
     AccountAlert = 3,
     MonthlyReport = 4,
+    EmailSyncComplete = 5,
+    ClassificationComplete = 6,
+    ExtractionComplete = 7,
 }

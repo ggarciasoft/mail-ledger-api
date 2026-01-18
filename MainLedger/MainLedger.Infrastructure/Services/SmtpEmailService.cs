@@ -97,6 +97,9 @@ public class SmtpEmailService : IEmailService
             EmailType.PasswordReset => "Reset Your Password",
             EmailType.AccountAlert => "Important Account Alert",
             EmailType.MonthlyReport => "Your Monthly Financial Report",
+            EmailType.EmailSyncComplete => "Email Sync Complete ✅",
+            EmailType.ClassificationComplete => "Classification Complete 🎯",
+            EmailType.ExtractionComplete => "Extraction Complete 💰",
             _ => "Notification from MailLedger",
         };
     }
@@ -109,6 +112,9 @@ public class SmtpEmailService : IEmailService
             EmailType.PasswordReset => "PasswordResetEmail.html",
             EmailType.AccountAlert => "AccountAlertEmail.html",
             EmailType.MonthlyReport => "MonthlyReportEmail.html",
+            EmailType.EmailSyncComplete => "EmailSyncCompleteEmail.html",
+            EmailType.ClassificationComplete => "ClassificationCompleteEmail.html",
+            EmailType.ExtractionComplete => "ExtractionCompleteEmail.html",
             _ => null,
         };
 

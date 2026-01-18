@@ -19,9 +19,15 @@ public sealed class User : Entity
     public DateTime UpdatedAt { get; private set; }
     public DateTime? LastLoginAt { get; private set; }
 
+    // Email Notification Preferences
+    public bool EmailNotificationsEnabled { get; private set; } = true;
+    public bool NotifyOnEmailSync { get; private set; } = true;
+    public bool NotifyOnClassification { get; private set; } = true;
+    public bool NotifyOnExtraction { get; private set; } = true;
+
     private User(
-        Guid id, 
-        EmailAddress email, 
+        Guid id,
+        EmailAddress email,
         string passwordHash,
         string firstName,
         string lastName,
@@ -29,7 +35,9 @@ public sealed class User : Entity
         bool isActive,
         DateTime createdAt,
         DateTime updatedAt,
-        DateTime? lastLoginAt) : base(id)
+        DateTime? lastLoginAt
+    )
+        : base(id)
     {
         Email = email ?? throw new ArgumentNullException(nameof(email));
         PasswordHash = passwordHash ?? throw new ArgumentNullException(nameof(passwordHash));
@@ -45,7 +53,12 @@ public sealed class User : Entity
     /// <summary>
     /// Registers a new user with hashed password.
     /// </summary>
-    public static User Register(EmailAddress email, string passwordHash, string firstName, string lastName)
+    public static User Register(
+        EmailAddress email,
+        string passwordHash,
+        string firstName,
+        string lastName
+    )
     {
         if (string.IsNullOrWhiteSpace(passwordHash))
             throw new ArgumentException("Password hash cannot be empty.", nameof(passwordHash));
@@ -65,7 +78,8 @@ public sealed class User : Entity
             isActive: true,
             createdAt: now,
             updatedAt: now,
-            lastLoginAt: null);
+            lastLoginAt: null
+        );
     }
 
     /// <summary>
@@ -84,7 +98,8 @@ public sealed class User : Entity
             isActive: true,
             createdAt: DateTime.UtcNow,
             updatedAt: DateTime.UtcNow,
-            lastLoginAt: null);
+            lastLoginAt: null
+        );
     }
 
     /// <summary>
@@ -162,8 +177,26 @@ public sealed class User : Entity
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Updates the user's email notification preferences.
+    /// </summary>
+    public void UpdateNotificationPreferences(
+        bool emailNotificationsEnabled,
+        bool notifyOnEmailSync,
+        bool notifyOnClassification,
+        bool notifyOnExtraction
+    )
+    {
+        EmailNotificationsEnabled = emailNotificationsEnabled;
+        NotifyOnEmailSync = notifyOnEmailSync;
+        NotifyOnClassification = notifyOnClassification;
+        NotifyOnExtraction = notifyOnExtraction;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     // For EF Core
-    private User() : base() 
+    private User()
+        : base()
     {
         Email = null!;
         PasswordHash = null!;

@@ -21,6 +21,8 @@ public class EmailSyncBackgroundJob
     private readonly IEmailSyncHistoryRepository _syncHistoryRepository;
     private readonly IJobNotificationService _jobNotificationService;
     private readonly ISubscriptionService _subscriptionService;
+    private readonly IEmailService _emailService;
+    private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<EmailSyncBackgroundJob> _logger;
 
@@ -34,6 +36,8 @@ public class EmailSyncBackgroundJob
         IEmailSyncHistoryRepository syncHistoryRepository,
         IJobNotificationService jobNotificationService,
         ISubscriptionService subscriptionService,
+        IEmailService emailService,
+        IUserRepository userRepository,
         IUnitOfWork unitOfWork,
         ILogger<EmailSyncBackgroundJob> logger
     )
@@ -47,6 +51,8 @@ public class EmailSyncBackgroundJob
         _syncHistoryRepository = syncHistoryRepository;
         _jobNotificationService = jobNotificationService;
         _subscriptionService = subscriptionService;
+        _emailService = emailService;
+        _userRepository = userRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -229,6 +235,22 @@ public class EmailSyncBackgroundJob
 
             // Notify clients of job completion
             await _jobNotificationService.NotifyJobCompleted(userId, job);
+
+            // Send email notification if user has enabled it
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user != null && user.EmailNotificationsEnabled && user.NotifyOnEmailSync)
+            {
+                await _emailService.QueueEmailAsync(
+                    user.Email.Value,
+                    EmailType.EmailSyncComplete,
+                    new Dictionary<string, string>
+                    {
+                        { "EmailCount", fetchedEmails.Count.ToString() },
+                        { "NewEmailCount", savedCount.ToString() },
+                    },
+                    cancellationToken
+                );
+            }
 
             _logger.LogInformation(
                 "Email sync job {JobId} completed: {Fetched} fetched, {Saved} saved, {Ignored} ignored",

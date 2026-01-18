@@ -1,6 +1,9 @@
 using MainLedger.Application.Authentication.Queries;
 using MainLedger.Application.Authentication.Services;
+using MainLedger.Application.Users.Commands;
+using MainLedger.Application.Users.Queries;
 using MainLedger.Contracts.Authentication;
+using MainLedger.Contracts.Users;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -78,5 +81,53 @@ public class UsersController : ControllerBase
                 new { error = "An error occurred while retrieving user information" }
             );
         }
+    }
+
+    /// <summary>
+    /// Get current user's notification preferences.
+    /// </summary>
+    [HttpGet("me/notification-preferences")]
+    [ProducesResponseType(typeof(NotificationPreferencesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<NotificationPreferencesDto>> GetNotificationPreferences(
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var query = new GetNotificationPreferencesQuery(userId.Value);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Update current user's notification preferences.
+    /// </summary>
+    [HttpPut("me/notification-preferences")]
+    [ProducesResponseType(typeof(NotificationPreferencesDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<NotificationPreferencesDto>> UpdateNotificationPreferences(
+        [FromBody] NotificationPreferencesDto preferences,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var command = new UpdateNotificationPreferencesCommand(
+            userId.Value,
+            preferences.EmailNotificationsEnabled,
+            preferences.NotifyOnEmailSync,
+            preferences.NotifyOnClassification,
+            preferences.NotifyOnExtraction
+        );
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return Ok(result);
     }
 }
