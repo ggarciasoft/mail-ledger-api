@@ -11,28 +11,34 @@ public sealed class ExtractionCandidate : Entity
 {
     public Guid EmailMessageId { get; private set; }
     public Guid ExtractionVersionId { get; private set; }
-    
+
+    // Email metadata (denormalized for persistence after email deletion)
+    public string EmailSubject { get; private set; } = string.Empty;
+    public string EmailFrom { get; private set; } = string.Empty;
+    public DateTime EmailReceivedAt { get; private set; }
+    public string EmailMessageIdExternal { get; private set; } = string.Empty; // Gmail message ID
+
     // Core transaction data
     public Money? Amount { get; private set; }
     public DateTime? TransactionDate { get; private set; }
     public string? Merchant { get; private set; }
-    
+
     // Account information
     public AccountNumber? SourceAccount { get; private set; }
     public AccountNumber? TargetAccount { get; private set; }
     public BankProvider? SourceBank { get; private set; }
     public BankProvider? TargetBank { get; private set; }
-    
+
     // Additional financial details
     public Money? Fees { get; private set; }
     public Money? Tax { get; private set; }
     public string? ReferenceId { get; private set; }
-    
+
     // Confidence scores
     public Confidence? AmountConfidence { get; private set; }
     public Confidence? DateConfidence { get; private set; }
     public Confidence? MerchantConfidence { get; private set; }
-    
+
     // Status tracking
     public RecordStatus Status { get; private set; }
     public string? RejectionReason { get; private set; }
@@ -43,7 +49,9 @@ public sealed class ExtractionCandidate : Entity
         Guid id,
         Guid emailMessageId,
         Guid extractionVersionId,
-        DateTime createdAt) : base(id)
+        DateTime createdAt
+    )
+        : base(id)
     {
         EmailMessageId = emailMessageId;
         ExtractionVersionId = extractionVersionId;
@@ -60,7 +68,19 @@ public sealed class ExtractionCandidate : Entity
             Guid.NewGuid(),
             emailMessageId,
             extractionVersionId,
-            DateTime.UtcNow);
+            DateTime.UtcNow
+        );
+    }
+
+    /// <summary>
+    /// Sets the email metadata for this candidate.
+    /// </summary>
+    public void SetEmailMetadata(string subject, string from, DateTime receivedAt, string messageId)
+    {
+        EmailSubject = subject ?? string.Empty;
+        EmailFrom = from ?? string.Empty;
+        EmailReceivedAt = receivedAt;
+        EmailMessageIdExternal = messageId ?? string.Empty;
     }
 
     /// <summary>
@@ -72,7 +92,8 @@ public sealed class ExtractionCandidate : Entity
         string? merchant,
         Confidence? amountConfidence,
         Confidence? dateConfidence,
-        Confidence? merchantConfidence)
+        Confidence? merchantConfidence
+    )
     {
         Amount = amount;
         TransactionDate = transactionDate;
@@ -89,7 +110,8 @@ public sealed class ExtractionCandidate : Entity
         AccountNumber? sourceAccount,
         AccountNumber? targetAccount,
         BankProvider? sourceBank,
-        BankProvider? targetBank)
+        BankProvider? targetBank
+    )
     {
         SourceAccount = sourceAccount;
         TargetAccount = targetAccount;
@@ -141,5 +163,6 @@ public sealed class ExtractionCandidate : Entity
     }
 
     // For EF Core
-    private ExtractionCandidate() : base() { }
+    private ExtractionCandidate()
+        : base() { }
 }
