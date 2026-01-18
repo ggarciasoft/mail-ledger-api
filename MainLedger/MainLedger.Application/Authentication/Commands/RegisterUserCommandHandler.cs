@@ -1,4 +1,6 @@
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
 using MainLedger.Domain.Services;
 using MainLedger.Domain.ValueObjects;
@@ -14,6 +16,7 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenGenerator _tokenGenerator;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEmailService _emailService;
     private readonly ILogger<RegisterUserCommandHandler> _logger;
 
     public RegisterUserCommandHandler(
@@ -22,13 +25,16 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
         IPasswordHasher passwordHasher,
         ITokenGenerator tokenGenerator,
         IUnitOfWork unitOfWork,
-        ILogger<RegisterUserCommandHandler> logger)
+        IEmailService emailService,
+        ILogger<RegisterUserCommandHandler> logger
+    )
     {
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
         _passwordHasher = passwordHasher;
         _tokenGenerator = tokenGenerator;
         _unitOfWork = unitOfWork;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -65,7 +71,21 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
         await _tokenRepository.AddAsync(emailVerificationToken, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("User {UserId} registered successfully with email {Email}", user.Id, request.Email);
+        _logger.LogInformation(
+            "User {UserId} registered successfully with email {Email}",
+            user.Id,
+            request.Email
+        );
+
+        // Send welcome email
+        await _emailService.QueueEmailAsync(
+            request.Email,
+            EmailType.UserWelcome,
+            new Dictionary<string, string> { { "Name", request.FirstName } },
+            cancellationToken
+        );
+
+        _logger.LogInformation("Welcome email queued for user {UserId}", user.Id);
 
         // TODO: Publish UserRegisteredEvent
         // TODO: Send verification email with token

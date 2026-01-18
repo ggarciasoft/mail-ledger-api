@@ -103,17 +103,33 @@ public class SmtpEmailService : IEmailService
 
     private string GetBodyTemplateForType(EmailType type)
     {
-        // In a real implementation, load these from files or DB
-        return type switch
+        var templateFileName = type switch
         {
-            EmailType.UserWelcome =>
-                "<h1>Welcome, {{Name}}!</h1><p>Thanks for joining MailLedger.</p>",
-            EmailType.PasswordReset =>
-                "<h1>Reset Password</h1><p>Click <a href='{{Link}}'>here</a> to reset.</p>",
-            EmailType.AccountAlert => "<h1>Alert</h1><p>{{Message}}</p>",
-            EmailType.MonthlyReport => "<h1>Monthly Report</h1><p>Your report is ready.</p>",
-            _ => "<p>{{Message}}</p>",
+            EmailType.UserWelcome => "WelcomeEmail.html",
+            EmailType.PasswordReset => "PasswordResetEmail.html",
+            EmailType.AccountAlert => "AccountAlertEmail.html",
+            EmailType.MonthlyReport => "MonthlyReportEmail.html",
+            _ => null,
         };
+
+        if (templateFileName == null)
+        {
+            return "<p>{{Message}}</p>";
+        }
+
+        var templatePath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "EmailTemplates",
+            templateFileName
+        );
+
+        if (!File.Exists(templatePath))
+        {
+            _logger.LogWarning("Email template not found: {TemplatePath}", templatePath);
+            return "<p>{{Message}}</p>";
+        }
+
+        return File.ReadAllText(templatePath);
     }
 
     private string ReplacePlaceholders(string template, Dictionary<string, string> placeholders)
