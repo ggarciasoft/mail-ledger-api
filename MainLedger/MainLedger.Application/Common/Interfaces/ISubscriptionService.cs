@@ -71,4 +71,9 @@ public interface ISubscriptionService
         Guid userId,
         CancellationToken cancellationToken = default
     );
+
+    Task<bool> CanUseExportAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    );
 }

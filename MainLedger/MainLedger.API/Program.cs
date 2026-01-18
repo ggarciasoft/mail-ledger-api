@@ -287,6 +287,17 @@ namespace MainLedger.API
                 MainLedger.Application.Services.EmailProviderFactory
             >();
 
+            // Register Email Notification Services
+            builder.Services.AddScoped<
+                MainLedger.Domain.Repositories.IEmailNotificationRepository,
+                MainLedger.Infrastructure.Persistence.Repositories.EmailNotificationRepository
+            >();
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IEmailService,
+                MainLedger.Infrastructure.Services.SmtpEmailService
+            >();
+            builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.EmailSendingBackgroundJob>();
+
             builder.Services.AddScoped<
                 Domain.Services.IPasswordHasher,
                 MainLedger.Infrastructure.Security.PasswordHasher

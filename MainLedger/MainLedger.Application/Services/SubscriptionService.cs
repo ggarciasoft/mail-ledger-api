@@ -175,4 +175,13 @@ public class SubscriptionService : ISubscriptionService
 
         return subscription!;
     }
+
+    public async Task<bool> CanUseExportAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
+        return subscription.SubscriptionPlan.CanExport;
+    }
 }

@@ -34,6 +34,7 @@ public class MailLedgerDbContext : DbContext
     // Subscription entities
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
     public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
+    public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
