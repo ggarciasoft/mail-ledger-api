@@ -1,3 +1,5 @@
+using MainLedger.Application.Common.Interfaces;
+using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
 using MainLedger.Domain.Services;
 using MediatR;
@@ -10,6 +12,7 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, boo
     private readonly IUserRepository _userRepository;
     private readonly IEmailVerificationTokenRepository _tokenRepository;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IEmailService _emailService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<VerifyEmailCommandHandler> _logger;
 
@@ -17,12 +20,15 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, boo
         IUserRepository userRepository,
         IEmailVerificationTokenRepository tokenRepository,
         IPasswordHasher passwordHasher,
+        IEmailService emailService,
         IUnitOfWork unitOfWork,
-        ILogger<VerifyEmailCommandHandler> logger)
+        ILogger<VerifyEmailCommandHandler> logger
+    )
     {
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
         _passwordHasher = passwordHasher;
+        _emailService = emailService;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -33,7 +39,10 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, boo
 
         // Hash the token to find it
         var tokenHash = _passwordHasher.HashPassword(request.Token);
-        var verificationToken = await _tokenRepository.GetByTokenHashAsync(tokenHash, cancellationToken);
+        var verificationToken = await _tokenRepository.GetByTokenHashAsync(
+            tokenHash,
+            cancellationToken
+        );
 
         if (verificationToken == null || !verificationToken.IsValid())
         {
@@ -45,12 +54,16 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, boo
         var user = await _userRepository.GetByIdAsync(verificationToken.UserId, cancellationToken);
         if (user == null)
         {
-            _logger.LogWarning("Email verification failed: User {UserId} not found", verificationToken.UserId);
+            _logger.LogWarning(
+                "Email verification failed: User {UserId} not found",
+                verificationToken.UserId
+            );
             return false;
         }
 
-        // Verify email
+        // Verify email and activate user
         user.VerifyEmail();
+        user.Activate();
 
         // Mark token as used
         verificationToken.MarkAsUsed();
@@ -58,7 +71,17 @@ public class VerifyEmailCommandHandler : IRequestHandler<VerifyEmailCommand, boo
         // Save changes
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Email verified successfully for user {UserId}", user.Id);
+        _logger.LogInformation("Email verified and user activated for user {UserId}", user.Id);
+
+        // Send welcome email now that user is verified and active
+        await _emailService.QueueEmailAsync(
+            user.Email.Value,
+            EmailType.UserWelcome,
+            new Dictionary<string, string> { { "Name", user.FirstName } },
+            cancellationToken
+        );
+
+        _logger.LogInformation("Welcome email queued for user {UserId}", user.Id);
 
         // TODO: Publish EmailVerifiedEvent
 

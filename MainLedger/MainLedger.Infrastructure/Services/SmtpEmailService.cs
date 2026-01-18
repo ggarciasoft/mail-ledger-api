@@ -100,6 +100,7 @@ public class SmtpEmailService : IEmailService
             EmailType.EmailSyncComplete => "Email Sync Complete ✅",
             EmailType.ClassificationComplete => "Classification Complete 🎯",
             EmailType.ExtractionComplete => "Extraction Complete 💰",
+            EmailType.EmailVerification => "Verify Your Email Address",
             _ => "Notification from MailLedger",
         };
     }
@@ -115,6 +116,7 @@ public class SmtpEmailService : IEmailService
             EmailType.EmailSyncComplete => "EmailSyncCompleteEmail.html",
             EmailType.ClassificationComplete => "ClassificationCompleteEmail.html",
             EmailType.ExtractionComplete => "ExtractionCompleteEmail.html",
+            EmailType.EmailVerification => "EmailVerificationEmail.html",
             _ => null,
         };
 

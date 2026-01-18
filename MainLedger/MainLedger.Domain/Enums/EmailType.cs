@@ -9,4 +9,5 @@ public enum EmailType
     EmailSyncComplete = 5,
     ClassificationComplete = 6,
     ExtractionComplete = 7,
+    EmailVerification
 }

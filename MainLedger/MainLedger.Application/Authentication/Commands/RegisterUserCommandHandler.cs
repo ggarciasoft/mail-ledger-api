@@ -85,18 +85,23 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, G
             request.Email
         );
 
-        // Send welcome email
+        // Send email verification email (not welcome email yet)
+        var verificationLink =
+            $"http://localhost:5173/verify-email?token={verificationToken}&email={Uri.EscapeDataString(request.Email)}";
         await _emailService.QueueEmailAsync(
             request.Email,
-            EmailType.UserWelcome,
-            new Dictionary<string, string> { { "Name", request.FirstName } },
+            EmailType.EmailVerification,
+            new Dictionary<string, string>
+            {
+                { "Name", request.FirstName },
+                { "VerificationLink", verificationLink },
+            },
             cancellationToken
         );
 
-        _logger.LogInformation("Welcome email queued for user {UserId}", user.Id);
+        _logger.LogInformation("Verification email queued for user {UserId}", user.Id);
 
         // TODO: Publish UserRegisteredEvent
-        // TODO: Send verification email with token
 
         return user.Id;
     }

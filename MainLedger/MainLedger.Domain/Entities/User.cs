@@ -75,7 +75,7 @@ public sealed class User : Entity
             firstName,
             lastName,
             isEmailVerified: false,
-            isActive: true,
+            isActive: false, // User starts inactive until email is verified
             createdAt: now,
             updatedAt: now,
             lastLoginAt: null
