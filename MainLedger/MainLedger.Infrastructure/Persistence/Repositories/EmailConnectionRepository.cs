@@ -31,6 +31,13 @@ public class EmailConnectionRepository : IEmailConnectionRepository
             .FirstOrDefaultAsync(ec => ec.UserId == userId && ec.Provider == provider);
     }
 
+    public async Task<EmailConnection?> GetByEmailAsync(string email)
+    {
+        return await _context
+            .EmailConnections.Include(ec => ec.User)
+            .FirstOrDefaultAsync(ec => ec.Email == email && ec.IsActive);
+    }
+
     public async Task<List<EmailConnection>> GetByUserIdAsync(Guid userId)
     {
         return await _context

@@ -7,6 +7,7 @@ public interface IEmailConnectionRepository
 {
     Task<EmailConnection?> GetByIdAsync(Guid id);
     Task<EmailConnection?> GetByUserAndProviderAsync(Guid userId, EmailProvider provider);
+    Task<EmailConnection?> GetByEmailAsync(string email);
     Task<List<EmailConnection>> GetByUserIdAsync(Guid userId);
     Task<int> CountByUserAndProviderAsync(
         Guid userId,

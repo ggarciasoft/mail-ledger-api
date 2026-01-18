@@ -135,6 +135,15 @@ public class GmailService : IGmailService
             EmailProvider.Gmail
         );
 
+        // Check if this email is already connected by another user
+        var emailOwner = await _emailConnectionRepository.GetByEmailAsync(profile.EmailAddress);
+        if (emailOwner != null && emailOwner.UserId != userId)
+        {
+            throw new InvalidOperationException(
+                $"The email {profile.EmailAddress} is already connected by another user."
+            );
+        }
+
         if (existingEmailConnection != null)
         {
             // Update existing EmailConnection
