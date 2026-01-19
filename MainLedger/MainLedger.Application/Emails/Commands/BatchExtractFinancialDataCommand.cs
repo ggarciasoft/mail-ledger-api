@@ -226,6 +226,7 @@ public class BatchExtractFinancialDataCommandHandler
             amount,
             result.NormalizedDate,
             result.NormalizedMerchant,
+            null, // merchantOriginal - not available in this legacy path
             result.AmountConfidence > 0 ? Confidence.Create(result.AmountConfidence) : null,
             result.DateConfidence > 0 ? Confidence.Create(result.DateConfidence) : null,
             result.MerchantConfidence > 0 ? Confidence.Create(result.MerchantConfidence) : null

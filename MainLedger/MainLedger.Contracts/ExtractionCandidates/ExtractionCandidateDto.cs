@@ -15,7 +15,8 @@ public class ExtractionCandidateDto
     // Core transaction data
     public decimal? Amount { get; init; }
     public string? Currency { get; init; }
-    public string? Merchant { get; init; }
+    public string? Merchant { get; init; } // Normalized merchant
+    public string? MerchantOriginal { get; init; } // Original AI-extracted merchant
     public DateTime? TransactionDate { get; init; }
 
     // Account information

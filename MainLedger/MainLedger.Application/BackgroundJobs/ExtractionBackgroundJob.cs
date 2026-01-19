@@ -188,7 +188,8 @@ public class ExtractionBackgroundJob
                         candidate.SetTransactionData(
                             amount,
                             normalizationResult.NormalizedDate,
-                            normalizationResult.NormalizedMerchant,
+                            normalizationResult.NormalizedMerchant, // Normalized merchant
+                            extractionResult.Merchant, // Original AI-extracted merchant
                             normalizationResult.AmountConfidence > 0
                                 ? Domain.ValueObjects.Confidence.Create(
                                     normalizationResult.AmountConfidence

@@ -86,6 +86,7 @@ public class GetExtractionCandidatesQueryHandler
                 Amount = candidate.Amount?.Amount,
                 Currency = candidate.Amount?.Currency.ToString(),
                 Merchant = candidate.Merchant,
+                MerchantOriginal = candidate.MerchantOriginal,
                 TransactionDate = candidate.TransactionDate,
                 SourceAccount = candidate.SourceAccount?.Value,
                 TargetAccount = candidate.TargetAccount?.Value,

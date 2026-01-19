@@ -6,7 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.ExtractionCandidates.Commands;
 
-public class UpdateExtractionCandidateCommandHandler : IRequestHandler<UpdateExtractionCandidateCommand, Unit>
+public class UpdateExtractionCandidateCommandHandler
+    : IRequestHandler<UpdateExtractionCandidateCommand, Unit>
 {
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IEmailMessageRepository _emailRepository;
@@ -17,7 +18,8 @@ public class UpdateExtractionCandidateCommandHandler : IRequestHandler<UpdateExt
         IExtractionCandidateRepository candidateRepository,
         IEmailMessageRepository emailRepository,
         IUnitOfWork unitOfWork,
-        ILogger<UpdateExtractionCandidateCommandHandler> logger)
+        ILogger<UpdateExtractionCandidateCommandHandler> logger
+    )
     {
         _candidateRepository = candidateRepository;
         _emailRepository = emailRepository;
@@ -25,30 +27,45 @@ public class UpdateExtractionCandidateCommandHandler : IRequestHandler<UpdateExt
         _logger = logger;
     }
 
-    public async Task<Unit> Handle(UpdateExtractionCandidateCommand request, CancellationToken cancellationToken)
+    public async Task<Unit> Handle(
+        UpdateExtractionCandidateCommand request,
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Updating extraction candidate {CandidateId} for user {UserId}",
-            request.CandidateId, request.UserId);
+            request.CandidateId,
+            request.UserId
+        );
 
         // Get candidate
-        var candidate = await _candidateRepository.GetByIdAsync(request.CandidateId, cancellationToken);
+        var candidate = await _candidateRepository.GetByIdAsync(
+            request.CandidateId,
+            cancellationToken
+        );
         if (candidate == null)
         {
             throw new KeyNotFoundException($"Extraction candidate {request.CandidateId} not found");
         }
 
         // Verify user authorization
-        var email = await _emailRepository.GetByIdAsync(candidate.EmailMessageId, cancellationToken);
+        var email = await _emailRepository.GetByIdAsync(
+            candidate.EmailMessageId,
+            cancellationToken
+        );
         if (email == null || email.UserId != request.UserId)
         {
-            throw new UnauthorizedAccessException($"User {request.UserId} does not have access to candidate {request.CandidateId}");
+            throw new UnauthorizedAccessException(
+                $"User {request.UserId} does not have access to candidate {request.CandidateId}"
+            );
         }
 
         // Verify status is Pending (can't edit confirmed or rejected)
         if (candidate.Status != RecordStatus.Pending)
         {
-            throw new InvalidOperationException($"Cannot update candidate with status {candidate.Status}. Only Pending candidates can be updated.");
+            throw new InvalidOperationException(
+                $"Cannot update candidate with status {candidate.Status}. Only Pending candidates can be updated."
+            );
         }
 
         // Update transaction data if provided
@@ -64,11 +81,13 @@ public class UpdateExtractionCandidateCommandHandler : IRequestHandler<UpdateExt
                 var money = Money.Create(amount.Value, currencyEnum);
                 candidate.SetTransactionData(
                     money,
-                    transactionDate,
-                    merchant,
+                    request.TransactionDate,
+                    request.Merchant,
+                    candidate.MerchantOriginal ?? request.Merchant, // Keep original or use updated merchant
                     candidate.AmountConfidence,
                     candidate.DateConfidence,
-                    candidate.MerchantConfidence);
+                    candidate.MerchantConfidence
+                );
             }
         }
 

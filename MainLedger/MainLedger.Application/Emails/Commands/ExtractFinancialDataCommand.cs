@@ -14,7 +14,8 @@ namespace MainLedger.Application.Emails.Commands;
 /// </summary>
 public record ExtractFinancialDataCommand(Guid EmailId) : IRequest<ExtractionCandidate>;
 
-public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinancialDataCommand, ExtractionCandidate>
+public class ExtractFinancialDataCommandHandler
+    : IRequestHandler<ExtractFinancialDataCommand, ExtractionCandidate>
 {
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IExtractionService _extractionService;
@@ -29,7 +30,8 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
         INormalizationService normalizationService,
         IExtractionVersionRepository versionRepository,
         IUnitOfWork unitOfWork,
-        ILogger<ExtractFinancialDataCommandHandler> logger)
+        ILogger<ExtractFinancialDataCommandHandler> logger
+    )
     {
         _emailRepository = emailRepository;
         _extractionService = extractionService;
@@ -39,10 +41,13 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
         _logger = logger;
     }
 
-    public async Task<ExtractionCandidate> Handle(ExtractFinancialDataCommand request, CancellationToken cancellationToken)
+    public async Task<ExtractionCandidate> Handle(
+        ExtractFinancialDataCommand request,
+        CancellationToken cancellationToken
+    )
     {
         var email = await _emailRepository.GetByIdAsync(request.EmailId, cancellationToken);
-        
+
         if (email == null)
         {
             throw new KeyNotFoundException($"Email not found: {request.EmailId}");
@@ -50,7 +55,9 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
 
         if (email.IsFinancial != true)
         {
-            throw new InvalidOperationException($"Email {request.EmailId} is not classified as financial");
+            throw new InvalidOperationException(
+                $"Email {request.EmailId} is not classified as financial"
+            );
         }
 
         _logger.LogInformation("Extracting financial data from email {EmailId}", request.EmailId);
@@ -63,32 +70,48 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
         }
 
         // Call extraction service
-        var extractionResult = await _extractionService.ExtractFinancialDataAsync(email, cancellationToken);
+        var extractionResult = await _extractionService.ExtractFinancialDataAsync(
+            email,
+            cancellationToken
+        );
 
         // Normalize extracted data
         var normalizationResult = await _normalizationService.NormalizeExtractionAsync(
-            extractionResult, 
-            email, 
-            cancellationToken);
+            extractionResult,
+            email,
+            cancellationToken
+        );
 
         // Check for validation errors
         if (!normalizationResult.IsValid)
         {
-            var errorMessages = string.Join(", ", normalizationResult.Errors.Select(e => $"{e.Field}: {e.Message}"));
+            var errorMessages = string.Join(
+                ", ",
+                normalizationResult.Errors.Select(e => $"{e.Field}: {e.Message}")
+            );
             _logger.LogWarning(
                 "Normalization failed for email {EmailId}: {Errors}",
-                request.EmailId, errorMessages);
-            
-            throw new InvalidOperationException($"Extraction normalization failed: {errorMessages}");
+                request.EmailId,
+                errorMessages
+            );
+
+            throw new InvalidOperationException(
+                $"Extraction normalization failed: {errorMessages}"
+            );
         }
 
         // Log warnings if any
         if (normalizationResult.HasWarnings)
         {
-            var warningMessages = string.Join(", ", normalizationResult.Warnings.Select(w => $"{w.Field}: {w.Message}"));
+            var warningMessages = string.Join(
+                ", ",
+                normalizationResult.Warnings.Select(w => $"{w.Field}: {w.Message}")
+            );
             _logger.LogWarning(
                 "Normalization warnings for email {EmailId}: {Warnings}",
-                request.EmailId, warningMessages);
+                request.EmailId,
+                warningMessages
+            );
         }
 
         // Create extraction candidate with normalized data
@@ -96,9 +119,18 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
 
         // Set transaction data using normalized values
         Money? amount = null;
-        if (normalizationResult.NormalizedAmount.HasValue && !string.IsNullOrWhiteSpace(normalizationResult.NormalizedCurrency))
+        if (
+            normalizationResult.NormalizedAmount.HasValue
+            && !string.IsNullOrWhiteSpace(normalizationResult.NormalizedCurrency)
+        )
         {
-            if (Enum.TryParse<Currency>(normalizationResult.NormalizedCurrency, true, out var currency))
+            if (
+                Enum.TryParse<Currency>(
+                    normalizationResult.NormalizedCurrency,
+                    true,
+                    out var currency
+                )
+            )
             {
                 amount = Money.Create(normalizationResult.NormalizedAmount.Value, currency);
             }
@@ -108,19 +140,26 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
             amount,
             normalizationResult.NormalizedDate,
             normalizationResult.NormalizedMerchant,
-            normalizationResult.AmountConfidence > 0 ? Confidence.Create(normalizationResult.AmountConfidence) : null,
-            normalizationResult.DateConfidence > 0 ? Confidence.Create(normalizationResult.DateConfidence) : null,
-            normalizationResult.MerchantConfidence > 0 ? Confidence.Create(normalizationResult.MerchantConfidence) : null);
-
+            null, // merchantOriginal - not available in this legacy path
+            normalizationResult.AmountConfidence > 0
+                ? Confidence.Create(normalizationResult.AmountConfidence)
+                : null,
+            normalizationResult.DateConfidence > 0
+                ? Confidence.Create(normalizationResult.DateConfidence)
+                : null,
+            normalizationResult.MerchantConfidence > 0
+                ? Confidence.Create(normalizationResult.MerchantConfidence)
+                : null
+        );
         // Set account info using normalized values
         AccountNumber? sourceAccount = null;
         AccountNumber? targetAccount = null;
-        
+
         if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedSourceAccount))
         {
             sourceAccount = AccountNumber.Create(normalizationResult.NormalizedSourceAccount);
         }
-        
+
         if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedTargetAccount))
         {
             targetAccount = AccountNumber.Create(normalizationResult.NormalizedTargetAccount);
@@ -128,15 +167,21 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
 
         BankProvider? sourceBank = null;
         BankProvider? targetBank = null;
-        
+
         if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedSourceBank))
         {
-            sourceBank = BankProvider.Create(normalizationResult.NormalizedSourceBank, normalizationResult.NormalizedSourceBank);
+            sourceBank = BankProvider.Create(
+                normalizationResult.NormalizedSourceBank,
+                normalizationResult.NormalizedSourceBank
+            );
         }
-        
+
         if (!string.IsNullOrWhiteSpace(normalizationResult.NormalizedTargetBank))
         {
-            targetBank = BankProvider.Create(normalizationResult.NormalizedTargetBank, normalizationResult.NormalizedTargetBank);
+            targetBank = BankProvider.Create(
+                normalizationResult.NormalizedTargetBank,
+                normalizationResult.NormalizedTargetBank
+            );
         }
 
         candidate.SetAccountInfo(sourceAccount, targetAccount, sourceBank, targetBank);
@@ -144,12 +189,12 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
         // Set additional details using normalized values
         Money? fees = null;
         Money? tax = null;
-        
+
         if (normalizationResult.NormalizedFees.HasValue && amount != null)
         {
             fees = Money.Create(normalizationResult.NormalizedFees.Value, amount.Currency);
         }
-        
+
         if (normalizationResult.NormalizedTax.HasValue && amount != null)
         {
             tax = Money.Create(normalizationResult.NormalizedTax.Value, amount.Currency);
@@ -163,7 +208,11 @@ public class ExtractFinancialDataCommandHandler : IRequestHandler<ExtractFinanci
 
         _logger.LogInformation(
             "Financial data extracted and normalized from email {EmailId}: Amount={Amount}, Merchant={Merchant}, Hash={Hash}",
-            request.EmailId, amount, normalizationResult.NormalizedMerchant, normalizationResult.DeduplicationHash);
+            request.EmailId,
+            amount,
+            normalizationResult.NormalizedMerchant,
+            normalizationResult.DeduplicationHash
+        );
 
         return candidate;
     }

@@ -16,6 +16,7 @@ public class ExtractionCandidateListItemDto
     public decimal? Amount { get; init; }
     public string? Currency { get; init; }
     public string? Merchant { get; init; }
+    public string? MerchantOriginal { get; init; }
     public DateTime? TransactionDate { get; init; }
 
     // Account information

@@ -21,7 +21,8 @@ public sealed class ExtractionCandidate : Entity
     // Core transaction data
     public Money? Amount { get; private set; }
     public DateTime? TransactionDate { get; private set; }
-    public string? Merchant { get; private set; }
+    public string? Merchant { get; private set; } // Normalized merchant name
+    public string? MerchantOriginal { get; private set; } // Original AI-extracted merchant name
 
     // Account information
     public AccountNumber? SourceAccount { get; private set; }
@@ -90,6 +91,7 @@ public sealed class ExtractionCandidate : Entity
         Money? amount,
         DateTime? transactionDate,
         string? merchant,
+        string? merchantOriginal,
         Confidence? amountConfidence,
         Confidence? dateConfidence,
         Confidence? merchantConfidence
@@ -98,6 +100,7 @@ public sealed class ExtractionCandidate : Entity
         Amount = amount;
         TransactionDate = transactionDate;
         Merchant = merchant;
+        MerchantOriginal = merchantOriginal;
         AmountConfidence = amountConfidence;
         DateConfidence = dateConfidence;
         MerchantConfidence = merchantConfidence;
