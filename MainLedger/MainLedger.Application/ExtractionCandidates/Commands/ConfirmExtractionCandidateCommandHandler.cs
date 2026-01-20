@@ -7,7 +7,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Application.ExtractionCandidates.Commands;
 
-public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmExtractionCandidateCommand, Guid>
+public class ConfirmExtractionCandidateCommandHandler
+    : IRequestHandler<ConfirmExtractionCandidateCommand, Guid>
 {
     private readonly IExtractionCandidateRepository _candidateRepository;
     private readonly IEmailMessageRepository _emailRepository;
@@ -22,7 +23,8 @@ public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmE
         IFinancialRecordRepository financialRecordRepository,
         IExtractionVersionRepository versionRepository,
         IUnitOfWork unitOfWork,
-        ILogger<ConfirmExtractionCandidateCommandHandler> logger)
+        ILogger<ConfirmExtractionCandidateCommandHandler> logger
+    )
     {
         _candidateRepository = candidateRepository;
         _emailRepository = emailRepository;
@@ -32,40 +34,60 @@ public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmE
         _logger = logger;
     }
 
-    public async Task<Guid> Handle(ConfirmExtractionCandidateCommand request, CancellationToken cancellationToken)
+    public async Task<Guid> Handle(
+        ConfirmExtractionCandidateCommand request,
+        CancellationToken cancellationToken
+    )
     {
         _logger.LogInformation(
             "Confirming extraction candidate {CandidateId} for user {UserId}",
-            request.CandidateId, request.UserId);
+            request.CandidateId,
+            request.UserId
+        );
 
         // Get candidate
-        var candidate = await _candidateRepository.GetByIdAsync(request.CandidateId, cancellationToken);
+        var candidate = await _candidateRepository.GetByIdAsync(
+            request.CandidateId,
+            cancellationToken
+        );
         if (candidate == null)
         {
             throw new KeyNotFoundException($"Extraction candidate {request.CandidateId} not found");
         }
 
         // Verify user authorization
-        var email = await _emailRepository.GetByIdAsync(candidate.EmailMessageId, cancellationToken);
+        var email = await _emailRepository.GetByIdAsync(
+            candidate.EmailMessageId,
+            cancellationToken
+        );
         if (email == null || email.UserId != request.UserId)
         {
-            throw new UnauthorizedAccessException($"User {request.UserId} does not have access to candidate {request.CandidateId}");
+            throw new UnauthorizedAccessException(
+                $"User {request.UserId} does not have access to candidate {request.CandidateId}"
+            );
         }
 
         // Verify status is Pending
         if (candidate.Status != RecordStatus.Pending)
         {
-            throw new InvalidOperationException($"Cannot confirm candidate with status {candidate.Status}. Only Pending candidates can be confirmed.");
+            throw new InvalidOperationException(
+                $"Cannot confirm candidate with status {candidate.Status}. Only Pending candidates can be confirmed."
+            );
         }
 
         // Confirm the candidate
         candidate.Confirm();
 
         // Get extraction version
-        var version = await _versionRepository.GetByIdAsync(candidate.ExtractionVersionId, cancellationToken);
+        var version = await _versionRepository.GetByIdAsync(
+            candidate.ExtractionVersionId,
+            cancellationToken
+        );
         if (version == null)
         {
-            throw new InvalidOperationException($"Extraction version {candidate.ExtractionVersionId} not found");
+            throw new InvalidOperationException(
+                $"Extraction version {candidate.ExtractionVersionId} not found"
+            );
         }
 
         // Create financial record from candidate
@@ -91,13 +113,14 @@ public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmE
             confidence: confidence,
             extractionVersion: version.Version,
             transactionDate: candidate.TransactionDate ?? email.ReceivedAt,
-            merchant: candidate.Merchant,
+            merchant: request.Merchant ?? candidate.Merchant, // Use request merchant if provided
             sourceAccount: candidate.SourceAccount,
             sourceBank: candidate.SourceBank,
             targetAccount: candidate.TargetAccount,
             targetBank: candidate.TargetBank,
             taxAmount: candidate.Tax,
-            feeAmount: candidate.Fees);
+            feeAmount: candidate.Fees
+        );
 
         // Confirm the financial record immediately since user confirmed it
         financialRecord.Confirm();
@@ -109,7 +132,9 @@ public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmE
 
         _logger.LogInformation(
             "Created financial record {RecordId} from candidate {CandidateId}",
-            financialRecord.Id, request.CandidateId);
+            financialRecord.Id,
+            request.CandidateId
+        );
 
         return financialRecord.Id;
     }
@@ -133,7 +158,7 @@ public class ConfirmExtractionCandidateCommandHandler : IRequestHandler<ConfirmE
         // Simplified logic - can be enhanced based on email category or other factors
         if (!string.IsNullOrWhiteSpace(candidate.Merchant))
             return TransactionType.Payment;
-        
+
         if (candidate.SourceAccount != null && candidate.TargetAccount != null)
             return TransactionType.Transfer;
 

@@ -126,6 +126,7 @@ public class ExtractionCandidatesController : ControllerBase
     [HttpPost("{id}/confirm")]
     public async Task<IActionResult> Confirm(
         [FromRoute] Guid id,
+        [FromBody] ConfirmCandidateRequest? request,
         CancellationToken cancellationToken = default
     )
     {
@@ -138,7 +139,11 @@ public class ExtractionCandidatesController : ControllerBase
 
         try
         {
-            var command = new ConfirmExtractionCandidateCommand(id, userId.Value);
+            var command = new ConfirmExtractionCandidateCommand(
+                id,
+                userId.Value,
+                request?.Merchant
+            );
             var financialRecordId = await _mediator.Send(command, cancellationToken);
 
             return Ok(

@@ -1,3 +1,4 @@
+using Hangfire;
 using MainLedger.Application.Authentication.Services;
 using MainLedger.Domain.Repositories;
 using Microsoft.AspNetCore.Authorization;
@@ -14,18 +15,21 @@ namespace MainLedger.API.Controllers;
 public class JobsController : ControllerBase
 {
     private readonly IProcessingJobRepository _jobRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<JobsController> _logger;
 
     public JobsController(
         IProcessingJobRepository jobRepository,
         ICurrentUserService currentUserService,
-        ILogger<JobsController> logger
+        ILogger<JobsController> logger,
+        IUnitOfWork unitOfWork
     )
     {
         _jobRepository = jobRepository;
         _currentUserService = currentUserService;
         _logger = logger;
+        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -207,14 +211,18 @@ public class JobsController : ControllerBase
                 return Forbid();
             }
 
-            // Cancel the job
+            // Cancel the job in database
             job.Cancel();
             _jobRepository.Update(job);
+            await _unitOfWork.SaveChangesAsync();
 
-            // Note: We would also need to cancel the Hangfire job here
-            Hangfire.BackgroundJob.Delete(job.HangfireJobId);
+            // Actually stop the Hangfire background job
+            if (!string.IsNullOrEmpty(job.HangfireJobId))
+            {
+                BackgroundJob.Delete(job.HangfireJobId);
+            }
 
-            _logger.LogInformation("Cancelled job {JobId} for user {UserId}", id, userId);
+            _logger.LogInformation("Job {JobId} cancelled by user {UserId}", id, userId);
 
             return Ok(new { message = "Job cancelled successfully" });
         }

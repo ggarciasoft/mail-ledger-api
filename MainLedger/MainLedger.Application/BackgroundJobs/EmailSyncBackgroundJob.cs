@@ -182,11 +182,8 @@ public class EmailSyncBackgroundJob
                         await _emailRepository.AddAsync(email, cancellationToken);
                         savedCount++;
 
-                        // Increment subscription email count
-                        await _subscriptionService.IncrementEmailCountAsync(
-                            userId,
-                            cancellationToken
-                        );
+                        // Note: Email sync does NOT increment subscription count
+                        // Only classification/extraction counts as "processing"
                     }
                     else
                     {

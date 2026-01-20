@@ -163,6 +163,14 @@ public class ExtractionBackgroundJob
                         // Create extraction candidate
                         var candidate = ExtractionCandidate.Create(email.Id, version.Id);
 
+                        // Set email metadata (denormalized for persistence)
+                        candidate.SetEmailMetadata(
+                            email.Subject,
+                            email.From.Value,
+                            email.ReceivedAt,
+                            email.MessageId
+                        );
+
                         // Set transaction data with normalized values
                         Domain.ValueObjects.Money? amount = null;
                         if (
