@@ -36,6 +36,9 @@ public class MailLedgerDbContext : DbContext
     public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
     public DbSet<EmailNotification> EmailNotifications => Set<EmailNotification>();
 
+    // Category entity
+    public DbSet<Category> Categories => Set<Category>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

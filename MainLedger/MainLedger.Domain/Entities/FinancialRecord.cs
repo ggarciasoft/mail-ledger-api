@@ -31,6 +31,12 @@ public sealed class FinancialRecord : Entity
     public string ExtractionVersion { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
+    // Category
+    public Guid? CategoryId { get; private set; }
+
+    // Navigation properties
+    public Category? Category { get; private set; }
+
     private FinancialRecord(
         Guid id,
         Guid userId,
@@ -48,33 +54,47 @@ public sealed class FinancialRecord : Entity
         Money? feeAmount,
         Confidence confidence,
         string extractionVersion,
-        DateTime createdAt) : base(id)
+        DateTime createdAt,
+        Guid? categoryId = null
+    )
+        : base(id)
     {
         // Validation
         if (transactionDate > DateTime.UtcNow)
         {
-            throw new ArgumentException("Transaction date cannot be in the future.", nameof(transactionDate));
+            throw new ArgumentException(
+                "Transaction date cannot be in the future.",
+                nameof(transactionDate)
+            );
         }
 
         if (type == TransactionType.Transfer && (sourceAccount == null || targetAccount == null))
         {
             throw new InvalidOperationException(
-                "Transfer transactions must have both source and target accounts.");
+                "Transfer transactions must have both source and target accounts."
+            );
         }
 
         if (taxAmount != null && taxAmount.Currency != amount.Currency)
         {
-            throw new InvalidOperationException("Tax amount must have the same currency as the transaction amount.");
+            throw new InvalidOperationException(
+                "Tax amount must have the same currency as the transaction amount."
+            );
         }
 
         if (feeAmount != null && feeAmount.Currency != amount.Currency)
         {
-            throw new InvalidOperationException("Fee amount must have the same currency as the transaction amount.");
+            throw new InvalidOperationException(
+                "Fee amount must have the same currency as the transaction amount."
+            );
         }
 
         if (string.IsNullOrWhiteSpace(extractionVersion))
         {
-            throw new ArgumentException("Extraction version cannot be empty.", nameof(extractionVersion));
+            throw new ArgumentException(
+                "Extraction version cannot be empty.",
+                nameof(extractionVersion)
+            );
         }
 
         UserId = userId;
@@ -94,6 +114,7 @@ public sealed class FinancialRecord : Entity
         Status = RecordStatus.Pending;
         ExtractionVersion = extractionVersion;
         CreatedAt = createdAt;
+        CategoryId = categoryId;
     }
 
     /// <summary>
@@ -114,7 +135,9 @@ public sealed class FinancialRecord : Entity
         AccountNumber? targetAccount = null,
         BankProvider? targetBank = null,
         Money? taxAmount = null,
-        Money? feeAmount = null)
+        Money? feeAmount = null,
+        Guid? categoryId = null
+    )
     {
         return new FinancialRecord(
             Guid.NewGuid(),
@@ -133,7 +156,9 @@ public sealed class FinancialRecord : Entity
             feeAmount,
             confidence,
             extractionVersion,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            categoryId
+        );
     }
 
     /// <summary>
@@ -196,22 +221,32 @@ public sealed class FinancialRecord : Entity
         BankProvider? targetBank = null,
         DateTime? transactionDate = null,
         Money? taxAmount = null,
-        Money? feeAmount = null)
+        Money? feeAmount = null
+    )
     {
         if (!CanBeModified())
         {
             throw new InvalidOperationException(
-                "Cannot modify a financial record that is confirmed or rejected.");
+                "Cannot modify a financial record that is confirmed or rejected."
+            );
         }
 
-        if (type.HasValue) Type = type.Value;
-        if (amount != null) Amount = amount;
-        if (direction.HasValue) Direction = direction.Value;
-        if (merchant != null) Merchant = merchant;
-        if (sourceAccount != null) SourceAccount = sourceAccount;
-        if (sourceBank != null) SourceBank = sourceBank;
-        if (targetAccount != null) TargetAccount = targetAccount;
-        if (targetBank != null) TargetBank = targetBank;
+        if (type.HasValue)
+            Type = type.Value;
+        if (amount != null)
+            Amount = amount;
+        if (direction.HasValue)
+            Direction = direction.Value;
+        if (merchant != null)
+            Merchant = merchant;
+        if (sourceAccount != null)
+            SourceAccount = sourceAccount;
+        if (sourceBank != null)
+            SourceBank = sourceBank;
+        if (targetAccount != null)
+            TargetAccount = targetAccount;
+        if (targetBank != null)
+            TargetBank = targetBank;
         if (transactionDate.HasValue)
         {
             if (transactionDate.Value > DateTime.UtcNow)
@@ -220,17 +255,21 @@ public sealed class FinancialRecord : Entity
             }
             TransactionDate = transactionDate.Value;
         }
-        if (taxAmount != null) TaxAmount = taxAmount;
-        if (feeAmount != null) FeeAmount = feeAmount;
+        if (taxAmount != null)
+            TaxAmount = taxAmount;
+        if (feeAmount != null)
+            FeeAmount = feeAmount;
 
         // Validate transfer invariant
         if (Type == TransactionType.Transfer && (SourceAccount == null || TargetAccount == null))
         {
             throw new InvalidOperationException(
-                "Transfer transactions must have both source and target accounts.");
+                "Transfer transactions must have both source and target accounts."
+            );
         }
     }
 
     // For EF Core
-    private FinancialRecord() : base() { }
+    private FinancialRecord()
+        : base() { }
 }

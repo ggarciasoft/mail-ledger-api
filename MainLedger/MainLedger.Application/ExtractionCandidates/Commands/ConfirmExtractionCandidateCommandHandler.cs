@@ -14,6 +14,7 @@ public class ConfirmExtractionCandidateCommandHandler
     private readonly IEmailMessageRepository _emailRepository;
     private readonly IFinancialRecordRepository _financialRecordRepository;
     private readonly IExtractionVersionRepository _versionRepository;
+    private readonly ICategoryRepository _categoryRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ConfirmExtractionCandidateCommandHandler> _logger;
 
@@ -22,6 +23,7 @@ public class ConfirmExtractionCandidateCommandHandler
         IEmailMessageRepository emailRepository,
         IFinancialRecordRepository financialRecordRepository,
         IExtractionVersionRepository versionRepository,
+        ICategoryRepository categoryRepository,
         IUnitOfWork unitOfWork,
         ILogger<ConfirmExtractionCandidateCommandHandler> logger
     )
@@ -30,6 +32,7 @@ public class ConfirmExtractionCandidateCommandHandler
         _emailRepository = emailRepository;
         _financialRecordRepository = financialRecordRepository;
         _versionRepository = versionRepository;
+        _categoryRepository = categoryRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -104,6 +107,43 @@ public class ConfirmExtractionCandidateCommandHandler
         var transactionType = DetermineTransactionType(candidate);
         var direction = DetermineDirection(candidate);
 
+        // Handle category auto-creation
+        Guid? categoryId = null;
+        if (!string.IsNullOrWhiteSpace(request.Category))
+        {
+            // Check if category exists (case-insensitive)
+            var existingCategory = await _categoryRepository.GetByNameAsync(
+                request.Category,
+                cancellationToken
+            );
+
+            if (existingCategory != null)
+            {
+                categoryId = existingCategory.Id;
+                _logger.LogDebug(
+                    "Using existing category {CategoryId} '{CategoryName}'",
+                    existingCategory.Id,
+                    existingCategory.Name
+                );
+            }
+            else
+            {
+                // Create new global category
+                var newCategory = Category.Create(request.Category);
+                await _categoryRepository.AddAsync(newCategory, cancellationToken);
+                categoryId = newCategory.Id;
+
+                _logger.LogInformation(
+                    "Created new category {CategoryId} '{CategoryName}'",
+                    newCategory.Id,
+                    newCategory.Name
+                );
+            }
+
+            // Set category on candidate
+            candidate.SetCategory(categoryId);
+        }
+
         var financialRecord = FinancialRecord.Create(
             userId: request.UserId,
             emailMessageId: candidate.EmailMessageId,
@@ -119,7 +159,8 @@ public class ConfirmExtractionCandidateCommandHandler
             targetAccount: candidate.TargetAccount,
             targetBank: candidate.TargetBank,
             taxAmount: candidate.Tax,
-            feeAmount: candidate.Fees
+            feeAmount: candidate.Fees,
+            categoryId: categoryId
         );
 
         // Confirm the financial record immediately since user confirmed it

@@ -46,6 +46,12 @@ public sealed class ExtractionCandidate : Entity
     public DateTime CreatedAt { get; private set; }
     public DateTime? ConfirmedAt { get; private set; }
 
+    // Category
+    public Guid? CategoryId { get; private set; }
+
+    // Navigation properties
+    public Category? Category { get; private set; }
+
     private ExtractionCandidate(
         Guid id,
         Guid emailMessageId,
@@ -130,6 +136,14 @@ public sealed class ExtractionCandidate : Entity
         Fees = fees;
         Tax = tax;
         ReferenceId = referenceId;
+    }
+
+    /// <summary>
+    /// Sets the category for this extraction candidate.
+    /// </summary>
+    public void SetCategory(Guid? categoryId)
+    {
+        CategoryId = categoryId;
     }
 
     /// <summary>

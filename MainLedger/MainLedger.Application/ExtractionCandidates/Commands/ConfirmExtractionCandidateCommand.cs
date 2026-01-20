@@ -8,5 +8,6 @@ namespace MainLedger.Application.ExtractionCandidates.Commands;
 public record ConfirmExtractionCandidateCommand(
     Guid CandidateId,
     Guid UserId,
-    string? Merchant = null
+    string? Merchant = null,
+    string? Category = null
 ) : IRequest<Guid>;

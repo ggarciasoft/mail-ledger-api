@@ -142,7 +142,8 @@ public class ExtractionCandidatesController : ControllerBase
             var command = new ConfirmExtractionCandidateCommand(
                 id,
                 userId.Value,
-                request?.Merchant
+                request?.Merchant,
+                request?.Category
             );
             var financialRecordId = await _mediator.Send(command, cancellationToken);
 

@@ -109,6 +109,7 @@ namespace MainLedger.API
             builder.Services.AddScoped<IProcessingJobRepository, ProcessingJobRepository>();
             builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
             builder.Services.AddScoped<IEmailConnectionRepository, EmailConnectionRepository>();
+            builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register HTTP Context Accessor (required for CurrentUserService)
