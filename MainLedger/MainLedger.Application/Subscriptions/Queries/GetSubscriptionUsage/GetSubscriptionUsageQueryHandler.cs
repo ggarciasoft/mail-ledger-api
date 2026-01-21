@@ -33,7 +33,7 @@ public class GetSubscriptionUsageQueryHandler
             request.UserId,
             cancellationToken
         );
-        var (emailsProcessed, emailLimit) = await _subscriptionService.GetEmailUsageAsync(
+        var (emailsClassified, classificationLimit) = await _subscriptionService.GetEmailUsageAsync(
             request.UserId,
             cancellationToken
         );
@@ -49,8 +49,10 @@ public class GetSubscriptionUsageQueryHandler
         );
 
         return new SubscriptionUsageDto(
-            emailsProcessed,
-            emailLimit,
+            emailsClassified,
+            0, // EmailsExtracted - will be tracked separately in Phase 2
+            classificationLimit,
+            limits.MaxEmailAccounts, // ExtractionLimit - using MaxEmailAccounts as placeholder
             emailAccountsCount,
             limits.MaxEmailAccounts,
             apiKeysCount,

@@ -36,7 +36,8 @@ public class GetUserSubscriptionQueryHandler
                 subscription.SubscriptionPlan.Name,
                 subscription.SubscriptionPlan.Description,
                 subscription.SubscriptionPlan.MonthlyPrice,
-                subscription.SubscriptionPlan.MonthlyEmailLimit,
+                subscription.SubscriptionPlan.ClassificationLimit,
+                subscription.SubscriptionPlan.ExtractionLimit,
                 subscription.SubscriptionPlan.MaxEmailAccounts,
                 subscription.SubscriptionPlan.MaxApiKeys,
                 subscription.SubscriptionPlan.HistoryRetentionDays,
@@ -50,7 +51,8 @@ public class GetUserSubscriptionQueryHandler
             subscription.StartDate,
             subscription.EndDate,
             subscription.Status.ToString(),
-            subscription.EmailsProcessedThisMonth,
+            subscription.EmailsClassifiedThisMonth,
+            subscription.EmailsExtractedThisMonth,
             subscription.CurrentPeriodStart,
             subscription.CurrentPeriodEnd
         );

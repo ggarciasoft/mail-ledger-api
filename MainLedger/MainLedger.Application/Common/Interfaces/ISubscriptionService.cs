@@ -21,6 +21,19 @@ public interface ISubscriptionService
     Task<bool> CanProcessEmailAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Increments the classification count for the user's current billing period.
+    /// </summary>
+    Task IncrementClassificationCountAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    /// Increments the extraction count for the user's current billing period.
+    /// </summary>
+    Task IncrementExtractionCountAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Increments the email count for the user's current billing period.
     /// </summary>
     Task IncrementEmailCountAsync(Guid userId, CancellationToken cancellationToken = default);
@@ -72,8 +85,5 @@ public interface ISubscriptionService
         CancellationToken cancellationToken = default
     );
 
-    Task<bool> CanUseExportAsync(
-        Guid userId,
-        CancellationToken cancellationToken = default
-    );
+    Task<bool> CanUseExportAsync(Guid userId, CancellationToken cancellationToken = default);
 }

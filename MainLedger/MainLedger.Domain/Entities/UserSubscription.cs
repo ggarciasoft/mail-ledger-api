@@ -19,7 +19,8 @@ public class UserSubscription : Entity
     public SubscriptionStatus Status { get; private set; }
 
     // Usage tracking
-    public int EmailsProcessedThisMonth { get; private set; }
+    public int EmailsClassifiedThisMonth { get; private set; }
+    public int EmailsExtractedThisMonth { get; private set; }
     public DateTime CurrentPeriodStart { get; private set; }
     public DateTime CurrentPeriodEnd { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -33,14 +34,15 @@ public class UserSubscription : Entity
         SubscriptionPlanId = subscriptionPlanId;
         StartDate = DateTime.UtcNow;
         Status = SubscriptionStatus.Active;
-        EmailsProcessedThisMonth = 0;
+        EmailsClassifiedThisMonth = 0;
+        EmailsExtractedThisMonth = 0;
         CurrentPeriodStart = DateTime.UtcNow;
         CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1);
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 
-    public void IncrementEmailCount()
+    public void IncrementClassifiedCount()
     {
         // Check if we need to reset the monthly counter
         if (DateTime.UtcNow > CurrentPeriodEnd)
@@ -48,17 +50,29 @@ public class UserSubscription : Entity
             ResetMonthlyUsage();
         }
 
-        EmailsProcessedThisMonth++;
+        EmailsClassifiedThisMonth++;
+    }
+
+    public void IncrementExtractedCount()
+    {
+        // Check if we need to reset the monthly counter
+        if (DateTime.UtcNow > CurrentPeriodEnd)
+        {
+            ResetMonthlyUsage();
+        }
+
+        EmailsExtractedThisMonth++;
     }
 
     public void ResetMonthlyUsage()
     {
-        EmailsProcessedThisMonth = 0;
+        EmailsClassifiedThisMonth = 0;
+        EmailsExtractedThisMonth = 0;
         CurrentPeriodStart = DateTime.UtcNow;
         CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1);
     }
 
-    public bool HasReachedEmailLimit(int limit)
+    public bool HasReachedClassificationLimit(int limit)
     {
         // Check if we need to reset first
         if (DateTime.UtcNow > CurrentPeriodEnd)
@@ -66,7 +80,18 @@ public class UserSubscription : Entity
             ResetMonthlyUsage();
         }
 
-        return EmailsProcessedThisMonth >= limit;
+        return EmailsClassifiedThisMonth >= limit;
+    }
+
+    public bool HasReachedExtractionLimit(int limit)
+    {
+        // Check if we need to reset first
+        if (DateTime.UtcNow > CurrentPeriodEnd)
+        {
+            ResetMonthlyUsage();
+        }
+
+        return EmailsExtractedThisMonth >= limit;
     }
 
     public void Upgrade(Guid newPlanId)

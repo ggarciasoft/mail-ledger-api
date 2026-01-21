@@ -18,7 +18,8 @@ public class SubscriptionPlan : Entity
     public decimal MonthlyPrice { get; private set; }
 
     // Email processing limits
-    public int MonthlyEmailLimit { get; private set; }
+    public int ClassificationLimit { get; private set; }
+    public int ExtractionLimit { get; private set; }
 
     // Connection limits
     public int MaxEmailAccounts { get; private set; }
@@ -49,7 +50,8 @@ public class SubscriptionPlan : Entity
         string name,
         string description,
         decimal monthlyPrice,
-        int monthlyEmailLimit,
+        int classificationLimit,
+        int extractionLimit,
         int maxEmailAccounts,
         int maxApiKeys,
         int historyRetentionDays,
@@ -64,7 +66,8 @@ public class SubscriptionPlan : Entity
         Name = name;
         Description = description;
         MonthlyPrice = monthlyPrice;
-        MonthlyEmailLimit = monthlyEmailLimit;
+        ClassificationLimit = classificationLimit;
+        ExtractionLimit = extractionLimit;
         MaxEmailAccounts = maxEmailAccounts;
         MaxApiKeys = maxApiKeys;
         HistoryRetentionDays = historyRetentionDays;

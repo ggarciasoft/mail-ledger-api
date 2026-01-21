@@ -37,8 +37,14 @@ public class UserSubscriptionConfiguration : IEntityTypeConfiguration<UserSubscr
             .IsRequired();
 
         builder
-            .Property(s => s.EmailsProcessedThisMonth)
-            .HasColumnName("emails_processed_this_month")
+            .Property(s => s.EmailsClassifiedThisMonth)
+            .HasColumnName("emails_classified_this_month")
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder
+            .Property(s => s.EmailsExtractedThisMonth)
+            .HasColumnName("emails_extracted_this_month")
             .IsRequired()
             .HasDefaultValue(0);
 

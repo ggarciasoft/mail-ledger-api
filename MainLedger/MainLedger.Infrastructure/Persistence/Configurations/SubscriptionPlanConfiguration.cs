@@ -29,9 +29,11 @@ public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<Subscripti
             .IsRequired();
 
         builder
-            .Property(p => p.MonthlyEmailLimit)
-            .HasColumnName("monthly_email_limit")
+            .Property(p => p.ClassificationLimit)
+            .HasColumnName("classification_limit")
             .IsRequired();
+
+        builder.Property(p => p.ExtractionLimit).HasColumnName("extraction_limit").IsRequired();
 
         builder.Property(p => p.MaxEmailAccounts).HasColumnName("max_email_accounts").IsRequired();
 

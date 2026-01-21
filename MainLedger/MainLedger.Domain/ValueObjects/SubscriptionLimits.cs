@@ -7,7 +7,8 @@ namespace MainLedger.Domain.ValueObjects;
 /// </summary>
 public class SubscriptionLimits
 {
-    public int MonthlyEmailLimit { get; }
+    public int ClassificationLimit { get; set; }
+    public int ExtractionLimit { get; set; }
     public int MaxEmailAccounts { get; }
     public int MaxApiKeys { get; }
     public int HistoryRetentionDays { get; }
@@ -18,7 +19,8 @@ public class SubscriptionLimits
     public bool CanUseBulkOperations { get; }
 
     public SubscriptionLimits(
-        int monthlyEmailLimit,
+        int classificationLimit,
+        int extractionLimit,
         int maxGmailAccounts,
         int maxApiKeys,
         int historyRetentionDays,
@@ -29,7 +31,8 @@ public class SubscriptionLimits
         bool canUseBulkOperations
     )
     {
-        MonthlyEmailLimit = monthlyEmailLimit;
+        ClassificationLimit = classificationLimit;
+        ExtractionLimit = extractionLimit;
         MaxEmailAccounts = maxGmailAccounts;
         MaxApiKeys = maxApiKeys;
         HistoryRetentionDays = historyRetentionDays;
@@ -43,7 +46,8 @@ public class SubscriptionLimits
     public static SubscriptionLimits FromPlan(SubscriptionPlan plan)
     {
         return new SubscriptionLimits(
-            plan.MonthlyEmailLimit,
+            plan.ClassificationLimit,
+            plan.ExtractionLimit,
             plan.MaxEmailAccounts,
             plan.MaxApiKeys,
             plan.HistoryRetentionDays,

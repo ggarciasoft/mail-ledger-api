@@ -8,7 +8,8 @@ public record SubscriptionPlanDto(
     string Name,
     string Description,
     decimal MonthlyPrice,
-    int MonthlyEmailLimit,
+    int ClassificationLimit,
+    int ExtractionLimit,
     int MaxEmailAccounts,
     int MaxApiKeys,
     int HistoryRetentionDays,
@@ -29,7 +30,8 @@ public record UserSubscriptionDto(
     DateTime StartDate,
     DateTime? EndDate,
     string Status,
-    int EmailsProcessedThisMonth,
+    int EmailsClassifiedThisMonth,
+    int EmailsExtractedThisMonth,
     DateTime CurrentPeriodStart,
     DateTime CurrentPeriodEnd
 );
@@ -38,8 +40,10 @@ public record UserSubscriptionDto(
 /// DTO for subscription usage statistics.
 /// </summary>
 public record SubscriptionUsageDto(
-    int EmailsProcessed,
-    int EmailLimit,
+    int EmailsClassified,
+    int EmailsExtracted,
+    int ClassificationLimit,
+    int ExtractionLimit,
     int EmailAccountsConnected,
     int EmailAccountsLimit,
     int ApiKeysCreated,

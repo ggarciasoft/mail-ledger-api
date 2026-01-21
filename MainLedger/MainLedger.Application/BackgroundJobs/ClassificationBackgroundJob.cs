@@ -299,7 +299,7 @@ public class ClassificationBackgroundJob
                         scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
                     for (int i = 0; i < successCount; i++)
                     {
-                        await subscriptionService.IncrementEmailCountAsync(
+                        await subscriptionService.IncrementClassificationCountAsync(
                             userId,
                             cancellationToken
                         );

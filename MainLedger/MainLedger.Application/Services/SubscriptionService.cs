@@ -41,13 +41,13 @@ public class SubscriptionService : ISubscriptionService
     )
     {
         var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
-        var limit = subscription.SubscriptionPlan.MonthlyEmailLimit;
+        var limit = subscription.SubscriptionPlan.ClassificationLimit;
 
         // Unlimited for enterprise
         if (limit == int.MaxValue)
             return true;
 
-        return !subscription.HasReachedEmailLimit(limit);
+        return !subscription.HasReachedClassificationLimit(limit);
     }
 
     public async Task IncrementEmailCountAsync(
@@ -56,7 +56,29 @@ public class SubscriptionService : ISubscriptionService
     )
     {
         var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
-        subscription.IncrementEmailCount();
+        subscription.IncrementClassifiedCount();
+        _subscriptionRepository.Update(subscription);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task IncrementClassificationCountAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
+        subscription.IncrementClassifiedCount();
+        _subscriptionRepository.Update(subscription);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task IncrementExtractionCountAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
+        subscription.IncrementExtractedCount();
         _subscriptionRepository.Update(subscription);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -144,8 +166,8 @@ public class SubscriptionService : ISubscriptionService
     {
         var subscription = await GetOrCreateSubscriptionAsync(userId, cancellationToken);
         return (
-            subscription.EmailsProcessedThisMonth,
-            subscription.SubscriptionPlan.MonthlyEmailLimit
+            subscription.EmailsClassifiedThisMonth,
+            subscription.SubscriptionPlan.ClassificationLimit
         );
     }
 
