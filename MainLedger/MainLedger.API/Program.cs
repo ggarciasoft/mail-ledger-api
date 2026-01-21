@@ -3,6 +3,7 @@ using Hangfire.PostgreSql;
 using MainLedger.Domain.Repositories;
 using MainLedger.Infrastructure.Persistence;
 using MainLedger.Infrastructure.Persistence.Repositories;
+using MainLedger.Infrastructure.Persistence.Seeders;
 using MainLedger.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -14,7 +15,7 @@ namespace MainLedger.API
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -446,6 +447,15 @@ namespace MainLedger.API
 
             // Map SignalR Hub
             app.MapHub<MainLedger.API.Hubs.JobHub>("/api/hubs/jobs");
+
+            // Seed default categories
+            using (var scope = app.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<MailLedgerDbContext>();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<CategorySeeder>>();
+                var categorySeeder = new CategorySeeder(context, logger);
+                await categorySeeder.SeedAsync();
+            }
 
             app.Run();
         }

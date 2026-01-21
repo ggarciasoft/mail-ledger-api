@@ -4,6 +4,7 @@ namespace MainLedger.Domain.Repositories;
 
 /// <summary>
 /// Repository interface for Category entity operations.
+/// Categories are global and shared across all users.
 /// </summary>
 public interface ICategoryRepository
 {
@@ -15,16 +16,12 @@ public interface ICategoryRepository
     /// <summary>
     /// Gets a category by name (case-insensitive).
     /// </summary>
-    Task<List<Category>> GetAllAsync(
-        CancellationToken cancellationToken = default
-    );
+    Task<List<Category>> GetAllAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets a category by name (case-insensitive).
     /// </summary>
-    Task<Category?> GetByNameAsync(
-        string name,
-        CancellationToken cancellationToken = default
-    );
+    Task<Category?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Adds a new category.

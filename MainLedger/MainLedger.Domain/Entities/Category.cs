@@ -1,8 +1,9 @@
 namespace MainLedger.Domain.Entities;
 
 /// <summary>
-/// Represents a user-defined category for financial records.
+/// Represents a global category for financial records.
 /// Categories help organize transactions (e.g., Groceries, Gasoline, Transport).
+/// Categories are shared across all users.
 /// </summary>
 public class Category
 {
@@ -11,9 +12,6 @@ public class Category
     public string? Description { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
-
-    // Navigation property
-    public User User { get; private set; } = null!;
 
     // EF Core constructor
     private Category() { }
@@ -28,7 +26,7 @@ public class Category
     }
 
     /// <summary>
-    /// Creates a new category for a user.
+    /// Creates a new global category.
     /// </summary>
     public static Category Create(string name, string? description = null)
     {
