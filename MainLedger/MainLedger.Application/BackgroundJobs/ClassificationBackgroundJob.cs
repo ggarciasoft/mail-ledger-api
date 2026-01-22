@@ -13,16 +13,22 @@ namespace MainLedger.Application.BackgroundJobs;
 public class ClassificationBackgroundJob
 {
     private readonly IJobNotificationService _jobNotificationService;
+    private readonly IEmailService _emailService;
+    private readonly IUserRepository _userRepository;
     private readonly ILogger<ClassificationBackgroundJob> _logger;
     private readonly IServiceProvider _serviceProvider;
 
     public ClassificationBackgroundJob(
         IJobNotificationService jobNotificationService,
+        IEmailService emailService,
+        IUserRepository userRepository,
         ILogger<ClassificationBackgroundJob> logger,
         IServiceProvider serviceProvider
     )
     {
         _jobNotificationService = jobNotificationService;
+        _emailService = emailService;
+        _userRepository = userRepository;
         _logger = logger;
         _serviceProvider = serviceProvider;
     }
@@ -319,6 +325,23 @@ public class ClassificationBackgroundJob
 
             await _jobNotificationService.NotifyJobUpdated(userId, job);
             await _jobNotificationService.NotifyJobCompleted(userId, job);
+
+            // Send email notification if user has enabled it
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user != null && user.EmailNotificationsEnabled && user.NotifyOnClassification)
+            {
+                await _emailService.QueueEmailAsync(
+                    user.Email.Value,
+                    EmailType.ClassificationComplete,
+                    new Dictionary<string, string>
+                    {
+                        { "TotalProcessed", processedCount.ToString() },
+                        { "FinancialCount", successCount.ToString() },
+                        { "NonFinancialCount", failureCount.ToString() },
+                    },
+                    cancellationToken
+                );
+            }
 
             _logger.LogInformation(
                 "Classification job {JobId} completed with parallel processing. Processed: {ProcessedCount}, Success: {SuccessCount}, Failures: {FailureCount}, Skipped (limit): {SkippedCount}",

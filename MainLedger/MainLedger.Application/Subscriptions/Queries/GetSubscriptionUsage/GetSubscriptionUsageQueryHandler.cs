@@ -12,16 +12,19 @@ public class GetSubscriptionUsageQueryHandler
     private readonly ISubscriptionService _subscriptionService;
     private readonly IApiKeyRepository _apiKeyRepository;
     private readonly IEmailConnectionRepository _emailConnectionRepository;
+    private readonly IUserSubscriptionRepository _userSubscriptionRepository;
 
     public GetSubscriptionUsageQueryHandler(
         ISubscriptionService subscriptionService,
         IApiKeyRepository apiKeyRepository,
-        IEmailConnectionRepository emailConnectionRepository
+        IEmailConnectionRepository emailConnectionRepository,
+        IUserSubscriptionRepository userSubscriptionRepository
     )
     {
         _subscriptionService = subscriptionService;
         _apiKeyRepository = apiKeyRepository;
         _emailConnectionRepository = emailConnectionRepository;
+        _userSubscriptionRepository = userSubscriptionRepository;
     }
 
     public async Task<SubscriptionUsageDto> Handle(
@@ -33,10 +36,17 @@ public class GetSubscriptionUsageQueryHandler
             request.UserId,
             cancellationToken
         );
-        var (emailsClassified, classificationLimit) = await _subscriptionService.GetEmailUsageAsync(
+
+        // Get the user's subscription to access usage and limits
+        var subscription = await _userSubscriptionRepository.GetByUserIdAsync(
             request.UserId,
             cancellationToken
         );
+
+        if (subscription == null)
+        {
+            throw new InvalidOperationException("User subscription not found");
+        }
 
         var apiKeysCount = await _apiKeyRepository.CountByUserIdAsync(
             request.UserId,
@@ -49,10 +59,10 @@ public class GetSubscriptionUsageQueryHandler
         );
 
         return new SubscriptionUsageDto(
-            emailsClassified,
-            0, // EmailsExtracted - will be tracked separately in Phase 2
-            classificationLimit,
-            limits.MaxEmailAccounts, // ExtractionLimit - using MaxEmailAccounts as placeholder
+            subscription.EmailsClassifiedThisMonth,
+            subscription.EmailsExtractedThisMonth,
+            subscription.SubscriptionPlan.ClassificationLimit,
+            subscription.SubscriptionPlan.ExtractionLimit,
             emailAccountsCount,
             limits.MaxEmailAccounts,
             apiKeysCount,

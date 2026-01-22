@@ -14,16 +14,22 @@ namespace MainLedger.Application.BackgroundJobs;
 public class ExtractionBackgroundJob
 {
     private readonly IJobNotificationService _jobNotificationService;
+    private readonly IEmailService _emailService;
+    private readonly IUserRepository _userRepository;
     private readonly ILogger<ExtractionBackgroundJob> _logger;
     private readonly IServiceProvider _serviceProvider;
 
     public ExtractionBackgroundJob(
         IJobNotificationService jobNotificationService,
+        IEmailService emailService,
+        IUserRepository userRepository,
         ILogger<ExtractionBackgroundJob> logger,
         IServiceProvider serviceProvider
     )
     {
         _jobNotificationService = jobNotificationService;
+        _emailService = emailService;
+        _userRepository = userRepository;
         _logger = logger;
         _serviceProvider = serviceProvider;
     }
@@ -374,10 +380,47 @@ public class ExtractionBackgroundJob
                 // Mark job as complete and save in same scope
                 trackedJob.Complete();
                 await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                // Increment extraction count for all successfully extracted emails
+                if (successCount > 0)
+                {
+                    var subscriptionService =
+                        scope.ServiceProvider.GetRequiredService<ISubscriptionService>();
+                    for (int i = 0; i < successCount; i++)
+                    {
+                        await subscriptionService.IncrementExtractionCountAsync(
+                            userId,
+                            cancellationToken
+                        );
+                    }
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                    _logger.LogInformation(
+                        "Incremented extraction count by {SuccessCount} for user {UserId}",
+                        successCount,
+                        userId
+                    );
+                }
             }
 
             await _jobNotificationService.NotifyJobUpdated(userId, job);
             await _jobNotificationService.NotifyJobCompleted(userId, job);
+
+            // Send email notification if user has enabled it
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user != null && user.EmailNotificationsEnabled && user.NotifyOnExtraction)
+            {
+                await _emailService.QueueEmailAsync(
+                    user.Email.Value,
+                    EmailType.ExtractionComplete,
+                    new Dictionary<string, string>
+                    {
+                        { "CandidateCount", processedCount.ToString() },
+                        { "SuccessCount", successCount.ToString() },
+                        { "FailedCount", failureCount.ToString() },
+                    },
+                    cancellationToken
+                );
+            }
 
             _logger.LogInformation(
                 "Extraction job {JobId} completed with parallel processing. Processed: {ProcessedCount}, Success: {SuccessCount}, Failures: {FailureCount}",
