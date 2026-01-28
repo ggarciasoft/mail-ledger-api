@@ -6,7 +6,7 @@ public interface IEmailProvider
 {
     EmailProvider ProviderType { get; }
     Task<OAuthUrlResult> GetAuthorizationUrlAsync(Guid userId);
-    Task<ConnectionResult> HandleOAuthCallbackAsync(string code, Guid userId);
+    Task<ConnectionResult> HandleOAuthCallbackAsync(string code, string state, Guid userId);
     Task<SyncResult> SyncEmailsAsync(Guid userId, SyncOptions options);
     Task<ConnectionStatus> GetConnectionStatusAsync(Guid userId);
     Task DisconnectAsync(Guid userId);

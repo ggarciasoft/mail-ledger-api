@@ -6,22 +6,22 @@ using MediatR;
 
 namespace MainLedger.Application.Email.Commands;
 
-public record ConnectEmailProviderCommand(EmailProvider Provider, string Code)
+public record ConnectEmailProviderCommand(EmailProvider Provider, string Code, string State)
     : IRequest<Result<EmailConnectionDto>>;
 
 public class ConnectEmailProviderCommandHandler
     : IRequestHandler<ConnectEmailProviderCommand, Result<EmailConnectionDto>>
 {
     private readonly IEmailProviderFactory _providerFactory;
-    private readonly Authentication.Services.ICurrentUserService _currentUserService;
+    private readonly IOAuthStateService _oauthStateService;
 
     public ConnectEmailProviderCommandHandler(
         IEmailProviderFactory providerFactory,
-        Authentication.Services.ICurrentUserService currentUserService
+        IOAuthStateService oauthStateService
     )
     {
         _providerFactory = providerFactory;
-        _currentUserService = currentUserService;
+        _oauthStateService = oauthStateService;
     }
 
     public async Task<Result<EmailConnectionDto>> Handle(
@@ -31,10 +31,15 @@ public class ConnectEmailProviderCommandHandler
     {
         try
         {
-            var provider = _providerFactory.GetProvider(request.Provider);
-            var userId = _currentUserService.GetUserId() ?? throw new InvalidOperationException("UserId cannot be null.");
+            // Extract user ID from state parameter
+            var userId = _oauthStateService.ParseUserId(request.State);
+            if (userId == null)
+            {
+                return Result<EmailConnectionDto>.Failure("Invalid OAuth state parameter");
+            }
 
-            var result = await provider.HandleOAuthCallbackAsync(request.Code, userId);
+            var provider = _providerFactory.GetProvider(request.Provider);
+            var result = await provider.HandleOAuthCallbackAsync(request.Code, request.State, userId.Value);
 
             if (!result.Success)
             {

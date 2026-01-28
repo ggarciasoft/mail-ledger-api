@@ -116,6 +116,19 @@ namespace MainLedger.API
             // Register HTTP Context Accessor (required for CurrentUserService)
             builder.Services.AddHttpContextAccessor();
 
+            // Register MemoryCache for PKCE state storage
+            builder.Services.AddMemoryCache();
+            builder.Services.AddSingleton<
+                MainLedger.Application.Common.Interfaces.IPkceStateStore,
+                MainLedger.Infrastructure.Services.InMemoryPkceStateStore
+            >();
+
+            // Register OAuth state service
+            builder.Services.AddSingleton<
+                MainLedger.Application.Common.Interfaces.IOAuthStateService,
+                MainLedger.Infrastructure.Services.OAuthStateService
+            >();
+
             // Register security services
             builder.Services.AddSingleton<
                 MainLedger.Application.Common.Interfaces.ITokenEncryptionService,

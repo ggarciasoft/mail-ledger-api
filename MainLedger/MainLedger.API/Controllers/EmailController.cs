@@ -11,15 +11,8 @@ namespace MainLedger.API.Controllers;
 [ApiController]
 [Route("api/email")]
 [Authorize]
-public class EmailController : ControllerBase
+public class EmailController(IMediator _mediator, ILogger<EmailController> _logger) : ControllerBase
 {
-    private readonly IMediator _mediator;
-
-    public EmailController(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
-
     /// <summary>
     /// Get OAuth authorization URL for email provider
     /// </summary>
@@ -34,14 +27,73 @@ public class EmailController : ControllerBase
     /// Handle OAuth callback and connect email provider
     /// </summary>
     [HttpGet("{provider}/callback")]
+    [AllowAnonymous] // Allow anonymous for OAuth callback
+    public async Task<IActionResult> HandleCallback(
+        [FromRoute] EmailProvider provider,
+        [FromQuery] string? code = null,
+        [FromQuery] string? state = null,
+        [FromQuery] string? error = null,
+        [FromQuery] string? error_description = null
+    )
+    {
+        try
+        {
+            // Check for OAuth errors
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogError("OAuth error: {Error} - {Description}", error, error_description);
+                return Redirect($"http://localhost:5173/settings?error={Uri.EscapeDataString(error_description ?? error)}");
+            }
+
+            // Validate required parameters
+            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+            {
+                _logger.LogError("Missing required parameters: code or state");
+                return Redirect($"http://localhost:5173/settings?error=invalid_callback_parameters");
+            }
+
+            var result = await _mediator.Send(new ConnectEmailProviderCommand(provider, code, state));
+
+            if (!result.IsSuccess)
+            {
+                _logger.LogError("Failed to connect {Provider}: {Error}", provider, result.Error);
+                return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+            }
+
+            // Redirect to settings page with success
+            return Redirect("http://localhost:5173/settings?email_connected=true");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling {Provider} callback", provider);
+            // Redirect to settings with error
+            return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+        }
+    }
+
+    /// <summary>
+    /// Handle OAuth callback and connect email provider
+    /// </summary>
     [HttpPost("{provider}/callback")]
+    [AllowAnonymous] // Allow anonymous for OAuth callback
     public async Task<IActionResult> HandleCallback(
         [FromRoute] EmailProvider provider,
         [FromBody] ConnectProviderRequest request
     )
     {
-        var result = await _mediator.Send(new ConnectEmailProviderCommand(provider, request.Code));
-        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+        try
+        {
+            var result = await _mediator.Send(new ConnectEmailProviderCommand(provider, request.Code, request.State));
+
+            // Redirect to settings page with success
+            return Redirect("http://localhost:5173/settings?email_connected=true");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling {provider} callback", provider);
+            // Redirect to settings with error
+            return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+        }
     }
 
     /// <summary>

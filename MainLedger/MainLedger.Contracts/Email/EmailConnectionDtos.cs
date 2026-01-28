@@ -18,6 +18,7 @@ public record GetAuthUrlResponse
 public record ConnectProviderRequest
 {
     public string Code { get; init; } = string.Empty;
+    public string State { get; init; } = string.Empty;
 }
 
 public record SyncEmailsRequest

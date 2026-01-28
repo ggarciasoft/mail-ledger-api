@@ -21,6 +21,8 @@ public class OutlookEmailProvider : IEmailProvider
     private readonly IEmailConnectionRepository _connectionRepository;
     private readonly IEmailMessageRepository _emailMessageRepository;
     private readonly ITokenEncryptionService _encryptionService;
+    private readonly IPkceStateStore _pkceStateStore;
+    private readonly IOAuthStateService _oauthStateService;
     private readonly OutlookSettings _settings;
     private readonly ILogger<OutlookEmailProvider> _logger;
 
@@ -30,6 +32,8 @@ public class OutlookEmailProvider : IEmailProvider
         IEmailConnectionRepository connectionRepository,
         IEmailMessageRepository emailMessageRepository,
         ITokenEncryptionService encryptionService,
+        IPkceStateStore pkceStateStore,
+        IOAuthStateService oauthStateService,
         OutlookSettings settings,
         ILogger<OutlookEmailProvider> logger
     )
@@ -37,14 +41,24 @@ public class OutlookEmailProvider : IEmailProvider
         _connectionRepository = connectionRepository;
         _emailMessageRepository = emailMessageRepository;
         _encryptionService = encryptionService;
+        _pkceStateStore = pkceStateStore;
+        _oauthStateService = oauthStateService;
         _settings = settings;
         _logger = logger;
     }
 
-    public Task<OAuthUrlResult> GetAuthorizationUrlAsync(Guid userId)
+    public async Task<OAuthUrlResult> GetAuthorizationUrlAsync(Guid userId)
     {
-        var state = Guid.NewGuid().ToString();
+        // Generate state with user ID encoded
+        var state = _oauthStateService.GenerateState(userId);
         var scopes = string.Join(" ", _settings.Scopes);
+
+        // Generate PKCE parameters
+        var codeVerifier = GenerateCodeVerifier();
+        var codeChallenge = GenerateCodeChallenge(codeVerifier);
+
+        // Store code verifier for later use (expires in 10 minutes)
+        await _pkceStateStore.StoreAsync(state, codeVerifier, TimeSpan.FromMinutes(10));
 
         var authUrl =
             $"https://login.microsoftonline.com/{_settings.TenantId}/oauth2/v2.0/authorize?"
@@ -53,17 +67,19 @@ public class OutlookEmailProvider : IEmailProvider
             + $"&redirect_uri={Uri.EscapeDataString(_settings.RedirectUri)}"
             + $"&scope={Uri.EscapeDataString(scopes)}"
             + $"&state={state}"
+            + $"&code_challenge={codeChallenge}"
+            + $"&code_challenge_method=S256"
             + $"&response_mode=query";
 
-        return Task.FromResult(new OAuthUrlResult { AuthorizationUrl = authUrl, State = state });
+        return new OAuthUrlResult { AuthorizationUrl = authUrl, State = state };
     }
 
-    public async Task<ConnectionResult> HandleOAuthCallbackAsync(string code, Guid userId)
+    public async Task<ConnectionResult> HandleOAuthCallbackAsync(string code, string state, Guid userId)
     {
         try
         {
             // Exchange code for tokens
-            var tokenResponse = await ExchangeCodeForTokensAsync(code);
+            var tokenResponse = await ExchangeCodeForTokensAsync(code, state);
 
             // Get user email using access token
             var userEmail = await GetUserEmailAsync(tokenResponse.AccessToken);
@@ -167,6 +183,8 @@ public class OutlookEmailProvider : IEmailProvider
                 return result;
             }
 
+            var mailHashes = new HashSet<string>();
+
             foreach (var message in messages.Value)
             {
                 try
@@ -189,6 +207,15 @@ public class OutlookEmailProvider : IEmailProvider
                     // Create content hash
                     var contentHash = ComputeContentHash(message.Subject ?? "", bodyText);
 
+                    // Check if email with same content already exists
+                    var contentExists = await _emailMessageRepository.ExistsByContentHashAsync(contentHash);
+                    if (contentExists || mailHashes.Contains(contentHash))
+                    {
+                        _logger.LogDebug("Skipping email {MessageId} - duplicate content hash", message.Id);
+                        result.EmailsSkipped++;
+                        continue;
+                    }
+
                     // Create email message using factory method
                     var emailMessage = EmailMessage.Create(
                         messageId: message.Id ?? Guid.NewGuid().ToString(),
@@ -205,6 +232,8 @@ public class OutlookEmailProvider : IEmailProvider
 
                     await _emailMessageRepository.AddAsync(emailMessage);
                     result.EmailsSynced++;
+
+                    mailHashes.Add(contentHash);
                 }
                 catch (Exception ex)
                 {
@@ -270,75 +299,73 @@ public class OutlookEmailProvider : IEmailProvider
             return _encryptionService.Decrypt(connection.EncryptedAccessToken);
         }
 
-        // Refresh token
-        var refreshToken = _encryptionService.Decrypt(connection.EncryptedRefreshToken);
-        var tokenResponse = await RefreshAccessTokenAsync(refreshToken);
-
-        connection.EncryptedAccessToken = _encryptionService.Encrypt(tokenResponse.AccessToken);
-        connection.EncryptedRefreshToken = _encryptionService.Encrypt(tokenResponse.RefreshToken);
-        connection.TokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+        // Token expired - mark connection as inactive and throw exception
+        // User will need to reconnect their Outlook account
+        _logger.LogWarning(
+            "Outlook access token expired for user {UserId}. Connection marked as inactive.",
+            connection.UserId
+        );
+        
+        connection.IsActive = false;
         await _connectionRepository.UpdateAsync(connection);
-
-        return tokenResponse.AccessToken;
+        
+        throw new InvalidOperationException(
+            "Outlook access token has expired. Please reconnect your Outlook account in settings."
+        );
     }
 
-    private async Task<TokenResponse> ExchangeCodeForTokensAsync(string code)
+    private async Task<TokenResponse> ExchangeCodeForTokensAsync(string code, string state)
     {
-        var app = ConfidentialClientApplicationBuilder
-            .Create(_settings.ClientId)
-            .WithClientSecret(_settings.ClientSecret)
-            .WithAuthority(new Uri($"https://login.microsoftonline.com/{_settings.TenantId}"))
-            .WithRedirectUri(_settings.RedirectUri)
-            .Build();
-
-        var result = await app.AcquireTokenByAuthorizationCode(_settings.Scopes, code)
-            .ExecuteAsync();
-
-        return new TokenResponse
+        // Retrieve code verifier from storage
+        var codeVerifier = await _pkceStateStore.RetrieveAsync(state);
+        if (string.IsNullOrEmpty(codeVerifier))
         {
-            AccessToken = result.AccessToken,
-            RefreshToken = result.Account?.HomeAccountId?.Identifier ?? string.Empty,
-            ExpiresIn = (int)(result.ExpiresOn - DateTimeOffset.UtcNow).TotalSeconds,
-        };
+            throw new InvalidOperationException("Code verifier not found for the provided state. The OAuth flow may have expired.");
+        }
+
+        try
+        {
+            // Use ConfidentialClientApplication for server-side OAuth with client secret
+            var app = ConfidentialClientApplicationBuilder
+                .Create(_settings.ClientId)
+                .WithClientSecret(_settings.ClientSecret)
+                .WithAuthority(new Uri($"https://login.microsoftonline.com/{_settings.TenantId}"))
+                .WithRedirectUri(_settings.RedirectUri)
+                .Build();
+
+            var result = await app.AcquireTokenByAuthorizationCode(_settings.Scopes, code)
+                .WithPkceCodeVerifier(codeVerifier)
+                .ExecuteAsync();
+
+            // For confidential clients, we need to extract the refresh token from the cache
+            // Store the account identifier which we'll use to get tokens later
+            var accountId = result.Account?.HomeAccountId?.Identifier ?? result.Account?.Username ?? string.Empty;
+            
+            return new TokenResponse
+            {
+                AccessToken = result.AccessToken,
+                RefreshToken = accountId, // Store account identifier for now
+                ExpiresIn = (int)(result.ExpiresOn - DateTimeOffset.UtcNow).TotalSeconds,
+            };
+        }
+        finally
+        {
+            // Clean up code verifier after use
+            await _pkceStateStore.RemoveAsync(state);
+        }
     }
 
     private async Task<TokenResponse> RefreshAccessTokenAsync(string accountIdentifier)
     {
-        var app = ConfidentialClientApplicationBuilder
-            .Create(_settings.ClientId)
-            .WithClientSecret(_settings.ClientSecret)
-            .WithAuthority(new Uri($"https://login.microsoftonline.com/{_settings.TenantId}"))
-            .Build();
-
-        // Try to get the account by identifier
-        if (!string.IsNullOrEmpty(accountIdentifier))
-        {
-            try
-            {
-                var account = await app.GetAccountAsync(accountIdentifier);
-                if (account != null)
-                {
-                    var result = await app.AcquireTokenSilent(_settings.Scopes, account)
-                        .ExecuteAsync();
-
-                    return new TokenResponse
-                    {
-                        AccessToken = result.AccessToken,
-                        RefreshToken = accountIdentifier, // Keep existing account identifier
-                        ExpiresIn = (int)(result.ExpiresOn - DateTimeOffset.UtcNow).TotalSeconds,
-                    };
-                }
-            }
-            catch (MsalUiRequiredException)
-            {
-                // Silent token acquisition failed, user needs to re-authenticate
-                throw new InvalidOperationException(
-                    "Token refresh failed. User needs to re-authenticate."
-                );
-            }
-        }
-
-        throw new InvalidOperationException("No valid account identifier found for token refresh");
+        // For now, just throw an exception indicating re-authentication is needed
+        // MSAL's token cache doesn't persist between requests for confidential clients
+        // A proper solution would require implementing a persistent token cache
+        // or storing the refresh token directly and using the token endpoint
+        
+        _logger.LogWarning("Token refresh not supported - user needs to reconnect Outlook");
+        throw new InvalidOperationException(
+            "Access token expired. Please reconnect your Outlook account."
+        );
     }
 
     private async Task<string> GetUserEmailAsync(string accessToken)
@@ -374,6 +401,38 @@ public class OutlookEmailProvider : IEmailProvider
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return Convert.ToBase64String(hash);
+    }
+
+    /// <summary>
+    /// Generate a cryptographically random code verifier for PKCE (128 characters)
+    /// </summary>
+    private static string GenerateCodeVerifier()
+    {
+        var bytes = new byte[96]; // 96 bytes = 128 base64url characters
+        RandomNumberGenerator.Fill(bytes);
+        return Base64UrlEncode(bytes);
+    }
+
+    /// <summary>
+    /// Generate code challenge from code verifier using SHA256
+    /// </summary>
+    private static string GenerateCodeChallenge(string codeVerifier)
+    {
+        var bytes = Encoding.UTF8.GetBytes(codeVerifier);
+        var hash = SHA256.HashData(bytes);
+        return Base64UrlEncode(hash);
+    }
+
+    /// <summary>
+    /// Base64url encoding (RFC 4648 Section 5)
+    /// </summary>
+    private static string Base64UrlEncode(byte[] input)
+    {
+        var base64 = Convert.ToBase64String(input);
+        return base64
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .Replace("=", "");
     }
 
     private class TokenResponse

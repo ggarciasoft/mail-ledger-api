@@ -45,7 +45,7 @@ public class GmailEmailProvider : IEmailProvider
         return Task.FromResult(result);
     }
 
-    public async Task<ConnectionResult> HandleOAuthCallbackAsync(string code, Guid userId)
+    public async Task<ConnectionResult> HandleOAuthCallbackAsync(string code, string state, Guid userId)
     {
         try
         {
