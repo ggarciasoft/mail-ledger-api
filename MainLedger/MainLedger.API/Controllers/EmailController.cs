@@ -33,6 +33,7 @@ public class EmailController : ControllerBase
     /// <summary>
     /// Handle OAuth callback and connect email provider
     /// </summary>
+    [HttpGet("{provider}/callback")]
     [HttpPost("{provider}/callback")]
     public async Task<IActionResult> HandleCallback(
         [FromRoute] EmailProvider provider,
