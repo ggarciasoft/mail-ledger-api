@@ -31,6 +31,11 @@ public class MailLedgerDbContext : DbContext
     public DbSet<WorkflowConfiguration> WorkflowConfigurations => Set<WorkflowConfiguration>();
     public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
 
+    // Webhook entities
+    public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+
+
     // Subscription entities
     public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
     public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();

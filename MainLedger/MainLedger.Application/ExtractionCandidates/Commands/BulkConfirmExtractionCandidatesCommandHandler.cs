@@ -21,6 +21,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
     private readonly IExtractionVersionRepository _versionRepository;
     private readonly ISubscriptionService _subscriptionService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IWebhookService _webhookService;
     private readonly ILogger<BulkConfirmExtractionCandidatesCommandHandler> _logger;
 
     public BulkConfirmExtractionCandidatesCommandHandler(
@@ -30,6 +31,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
         IExtractionVersionRepository versionRepository,
         ISubscriptionService subscriptionService,
         IUnitOfWork unitOfWork,
+        IWebhookService webhookService,
         ILogger<BulkConfirmExtractionCandidatesCommandHandler> logger
     )
     {
@@ -39,6 +41,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
         _versionRepository = versionRepository;
         _subscriptionService = subscriptionService;
         _unitOfWork = unitOfWork;
+        _webhookService = webhookService;
         _logger = logger;
     }
 
@@ -83,6 +86,7 @@ public class BulkConfirmExtractionCandidatesCommandHandler
 
         var succeeded = 0;
         var errors = new List<BulkOperationError>();
+        var confirmedRecords = new List<object>(); // Track confirmed records for webhook
 
         // Process each candidate independently
         foreach (var candidateId in request.CandidateIds)
@@ -204,6 +208,23 @@ public class BulkConfirmExtractionCandidatesCommandHandler
 
                 succeeded++;
 
+                // Add to confirmed records for webhook
+                confirmedRecords.Add(new
+                {
+                    id = financialRecord.Id,
+                    type = financialRecord.Type.ToString(),
+                    amount = financialRecord.Amount.Amount,
+                    currency = financialRecord.Amount.Currency.ToString(),
+                    direction = financialRecord.Direction.ToString(),
+                    merchant = financialRecord.Merchant,
+                    transactionDate = financialRecord.TransactionDate,
+                    sourceAccount = financialRecord.SourceAccount,
+                    sourceBank = financialRecord.SourceBank,
+                    targetAccount = financialRecord.TargetAccount,
+                    targetBank = financialRecord.TargetBank,
+                    confidence = financialRecord.Confidence.Value
+                });
+
                 _logger.LogInformation(
                     "Confirmed extraction candidate {CandidateId}, created financial record {RecordId}",
                     candidateId,
@@ -224,6 +245,25 @@ public class BulkConfirmExtractionCandidatesCommandHandler
             succeeded,
             errors.Count
         );
+
+        // Trigger webhooks if any records were confirmed
+        if (confirmedRecords.Any())
+        {
+            try
+            {
+                await _webhookService.TriggerWebhooksAsync(
+                    request.UserId,
+                    WebhookEventType.CandidateBulkConfirmed,
+                    new { records = confirmedRecords, totalCount = confirmedRecords.Count },
+                    cancellationToken
+                );
+            }
+            catch (Exception ex)
+            {
+                // Don't fail the bulk operation if webhook delivery fails
+                _logger.LogError(ex, "Failed to trigger webhooks for bulk confirmation");
+            }
+        }
 
         return new BulkOperationResponse
         {

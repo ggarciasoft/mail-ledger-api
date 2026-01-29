@@ -111,6 +111,8 @@ namespace MainLedger.API
             builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
             builder.Services.AddScoped<IEmailConnectionRepository, EmailConnectionRepository>();
             builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+            builder.Services.AddScoped<IWebhookEndpointRepository, WebhookEndpointRepository>();
+            builder.Services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
             // Register HTTP Context Accessor (required for CurrentUserService)
@@ -312,6 +314,13 @@ namespace MainLedger.API
                 MainLedger.Infrastructure.Services.SmtpEmailService
             >();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.EmailSendingBackgroundJob>();
+
+            // Register Webhook Service
+            builder.Services.AddHttpClient(); // Required for WebhookService
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IWebhookService,
+                MainLedger.Infrastructure.Services.WebhookService
+            >();
 
             builder.Services.AddScoped<
                 Domain.Services.IPasswordHasher,

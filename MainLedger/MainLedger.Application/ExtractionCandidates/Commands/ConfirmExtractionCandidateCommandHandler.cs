@@ -1,3 +1,4 @@
+using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
@@ -16,6 +17,7 @@ public class ConfirmExtractionCandidateCommandHandler
     private readonly IExtractionVersionRepository _versionRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IWebhookService _webhookService;
     private readonly ILogger<ConfirmExtractionCandidateCommandHandler> _logger;
 
     public ConfirmExtractionCandidateCommandHandler(
@@ -25,6 +27,7 @@ public class ConfirmExtractionCandidateCommandHandler
         IExtractionVersionRepository versionRepository,
         ICategoryRepository categoryRepository,
         IUnitOfWork unitOfWork,
+        IWebhookService webhookService,
         ILogger<ConfirmExtractionCandidateCommandHandler> logger
     )
     {
@@ -34,6 +37,7 @@ public class ConfirmExtractionCandidateCommandHandler
         _versionRepository = versionRepository;
         _categoryRepository = categoryRepository;
         _unitOfWork = unitOfWork;
+        _webhookService = webhookService;
         _logger = logger;
     }
 
@@ -176,6 +180,36 @@ public class ConfirmExtractionCandidateCommandHandler
             financialRecord.Id,
             request.CandidateId
         );
+
+        // Trigger webhooks
+        try
+        {
+            await _webhookService.TriggerWebhooksAsync(
+                request.UserId,
+                WebhookEventType.CandidateConfirmed,
+                new
+                {
+                    id = financialRecord.Id,
+                    type = financialRecord.Type.ToString(),
+                    amount = financialRecord.Amount.Amount,
+                    currency = financialRecord.Amount.Currency.ToString(),
+                    direction = financialRecord.Direction.ToString(),
+                    merchant = financialRecord.Merchant,
+                    transactionDate = financialRecord.TransactionDate,
+                    sourceAccount = financialRecord.SourceAccount,
+                    sourceBank = financialRecord.SourceBank,
+                    targetAccount = financialRecord.TargetAccount,
+                    targetBank = financialRecord.TargetBank,
+                    confidence = financialRecord.Confidence.Value
+                },
+                cancellationToken
+            );
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the confirmation if webhook delivery fails
+            _logger.LogError(ex, "Failed to trigger webhooks for financial record {RecordId}", financialRecord.Id);
+        }
 
         return financialRecord.Id;
     }
