@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using Hangfire;
+using MainLedger.Application.BackgroundJobs;
 using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Enums;
@@ -23,6 +25,8 @@ public class OutlookEmailProvider : IEmailProvider
     private readonly ITokenEncryptionService _encryptionService;
     private readonly IPkceStateStore _pkceStateStore;
     private readonly IOAuthStateService _oauthStateService;
+    private readonly IProcessingJobRepository _jobRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly OutlookSettings _settings;
     private readonly ILogger<OutlookEmailProvider> _logger;
 
@@ -34,6 +38,8 @@ public class OutlookEmailProvider : IEmailProvider
         ITokenEncryptionService encryptionService,
         IPkceStateStore pkceStateStore,
         IOAuthStateService oauthStateService,
+        IProcessingJobRepository jobRepository,
+        IUnitOfWork unitOfWork,
         OutlookSettings settings,
         ILogger<OutlookEmailProvider> logger
     )
@@ -43,6 +49,8 @@ public class OutlookEmailProvider : IEmailProvider
         _encryptionService = encryptionService;
         _pkceStateStore = pkceStateStore;
         _oauthStateService = oauthStateService;
+        _jobRepository = jobRepository;
+        _unitOfWork = unitOfWork;
         _settings = settings;
         _logger = logger;
     }
@@ -141,6 +149,82 @@ public class OutlookEmailProvider : IEmailProvider
 
     public async Task<SyncResult> SyncEmailsAsync(Guid userId, SyncOptions options)
     {
+        try
+        {
+            _logger.LogInformation("Enqueueing Outlook sync job for user {UserId}", userId);
+
+            var connection = await _connectionRepository.GetByUserAndProviderAsync(
+                userId,
+                EmailProvider.Outlook
+            );
+            
+            if (connection == null || !connection.IsActive)
+            {
+                _logger.LogWarning("No active Outlook connection found for user {UserId}", userId);
+                return new SyncResult
+                {
+                    EmailsSynced = 0,
+                    EmailsSkipped = 0,
+                    Errors = new List<string>
+                    {
+                        "No active Outlook connection found. Please connect your Outlook account first.",
+                    },
+                };
+            }
+
+            // Create a processing job for tracking
+            var job = ProcessingJob.Create(
+                userId,
+                JobType.EmailSync,
+                string.Empty, // Hangfire job ID will be set after enqueueing
+                $"Provider: Outlook, MaxEmails: {options.MaxResults ?? 100}"
+            );
+
+            await _jobRepository.AddAsync(job, CancellationToken.None);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+
+            // Enqueue background job using Hangfire
+            var hangfireJobId = BackgroundJob.Enqueue<EmailSyncBackgroundJob>(x =>
+                x.ExecuteAsync(job.Id, userId, EmailProvider.Outlook, options.MaxResults ?? 100, default)
+            );
+
+            job.SetHangfireJobId(hangfireJobId);
+            _jobRepository.Update(job);
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+
+            _logger.LogInformation(
+                "Outlook sync job {JobId} enqueued with Hangfire ID {HangfireJobId}",
+                job.Id,
+                hangfireJobId
+            );
+
+            // Return immediately - the background job will handle the actual sync
+            // Frontend should poll for job status or use SignalR for real-time updates
+            return new SyncResult
+            {
+                EmailsSynced = 0,
+                EmailsSkipped = 0,
+                Errors = new List<string>(), // Empty errors - job queued successfully
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enqueue Outlook sync job for user {UserId}", userId);
+            return new SyncResult
+            {
+                EmailsSynced = 0,
+                EmailsSkipped = 0,
+                Errors = new List<string> { $"Failed to queue sync job: {ex.Message}" },
+            };
+        }
+    }
+
+    /// <summary>
+    /// Internal method to perform the actual Outlook email sync.
+    /// Called by EmailSyncBackgroundJob.
+    /// </summary>
+    public async Task<SyncResult> PerformSyncAsync(Guid userId, SyncOptions options, CancellationToken cancellationToken = default)
+    {
         var connection = await _connectionRepository.GetByUserAndProviderAsync(
             userId,
             EmailProvider.Outlook
@@ -170,6 +254,8 @@ public class OutlookEmailProvider : IEmailProvider
                 config.QueryParameters.Select = new[]
                 {
                     "id",
+                    "internetMessageId",
+                    "conversationId",
                     "subject",
                     "from",
                     "receivedDateTime",
@@ -189,9 +275,17 @@ public class OutlookEmailProvider : IEmailProvider
             {
                 try
                 {
-                    // Check if already synced
+                    // Validate message ID - this should never be null if we're selecting it
+                    if (string.IsNullOrEmpty(message.Id))
+                    {
+                        _logger.LogWarning("Skipping message with null ID. Subject: {Subject}", message.Subject);
+                        result.EmailsSkipped++;
+                        continue;
+                    }
+
+                    // Check if already synced by provider message ID
                     var existingEmail = await _emailMessageRepository.GetByProviderMessageIdAsync(
-                        message.Id ?? string.Empty,
+                        message.Id,
                         EmailProvider.Outlook
                     );
 
@@ -218,9 +312,10 @@ public class OutlookEmailProvider : IEmailProvider
 
                     // Create email message using factory method
                     var emailMessage = EmailMessage.Create(
-                        messageId: message.Id ?? Guid.NewGuid().ToString(),
-                        threadId: message.ConversationId ?? message.Id ?? Guid.NewGuid().ToString(),
+                        messageId: message.Id,
+                        threadId: message.ConversationId ?? message.Id,
                         userId: userId,
+                        provider: EmailProvider.Outlook,
                         subject: message.Subject ?? "(No Subject)",
                         from: Domain.ValueObjects.EmailAddress.Create(
                             message.From?.EmailAddress?.Address ?? "unknown@unknown.com"
@@ -244,6 +339,19 @@ public class OutlookEmailProvider : IEmailProvider
 
             connection.LastSyncedAt = DateTime.UtcNow;
             await _connectionRepository.UpdateAsync(connection);
+            
+            _logger.LogInformation(
+                "Outlook sync completed for user {UserId}. Synced: {Synced}, Skipped: {Skipped}, Errors: {ErrorCount}",
+                userId,
+                result.EmailsSynced,
+                result.EmailsSkipped,
+                result.Errors.Count
+            );
+            
+            // Commit all changes to database
+            await _unitOfWork.SaveChangesAsync(CancellationToken.None);
+            
+            _logger.LogInformation("Database changes committed successfully for user {UserId}", userId);
         }
         catch (Exception ex)
         {
@@ -299,19 +407,51 @@ public class OutlookEmailProvider : IEmailProvider
             return _encryptionService.Decrypt(connection.EncryptedAccessToken);
         }
 
-        // Token expired - mark connection as inactive and throw exception
-        // User will need to reconnect their Outlook account
-        _logger.LogWarning(
-            "Outlook access token expired for user {UserId}. Connection marked as inactive.",
+        // Token expired - attempt to refresh it
+        _logger.LogInformation(
+            "Outlook access token expired for user {UserId}. Attempting refresh...",
             connection.UserId
         );
-        
-        connection.IsActive = false;
-        await _connectionRepository.UpdateAsync(connection);
-        
-        throw new InvalidOperationException(
-            "Outlook access token has expired. Please reconnect your Outlook account in settings."
-        );
+
+        try
+        {
+            // Decrypt the refresh token
+            var refreshToken = _encryptionService.Decrypt(connection.EncryptedRefreshToken);
+
+            // Call the token endpoint to refresh
+            var tokenResponse = await RefreshAccessTokenAsync(refreshToken);
+
+            // Encrypt and update the connection with new tokens
+            connection.EncryptedAccessToken = _encryptionService.Encrypt(tokenResponse.AccessToken);
+            connection.EncryptedRefreshToken = _encryptionService.Encrypt(tokenResponse.RefreshToken);
+            connection.TokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+
+            await _connectionRepository.UpdateAsync(connection);
+
+            _logger.LogInformation(
+                "Successfully refreshed Outlook access token for user {UserId}",
+                connection.UserId
+            );
+
+            return tokenResponse.AccessToken;
+        }
+        catch (Exception ex)
+        {
+            // Refresh failed - mark connection as inactive
+            _logger.LogError(
+                ex,
+                "Failed to refresh Outlook token for user {UserId}. Marking connection inactive.",
+                connection.UserId
+            );
+
+            connection.IsActive = false;
+            await _connectionRepository.UpdateAsync(connection);
+
+            throw new InvalidOperationException(
+                "Outlook access token has expired and refresh failed. Please reconnect your Outlook account in settings.",
+                ex
+            );
+        }
     }
 
     private async Task<TokenResponse> ExchangeCodeForTokensAsync(string code, string state)
@@ -325,27 +465,59 @@ public class OutlookEmailProvider : IEmailProvider
 
         try
         {
-            // Use ConfidentialClientApplication for server-side OAuth with client secret
-            var app = ConfidentialClientApplicationBuilder
-                .Create(_settings.ClientId)
-                .WithClientSecret(_settings.ClientSecret)
-                .WithAuthority(new Uri($"https://login.microsoftonline.com/{_settings.TenantId}"))
-                .WithRedirectUri(_settings.RedirectUri)
-                .Build();
-
-            var result = await app.AcquireTokenByAuthorizationCode(_settings.Scopes, code)
-                .WithPkceCodeVerifier(codeVerifier)
-                .ExecuteAsync();
-
-            // For confidential clients, we need to extract the refresh token from the cache
-            // Store the account identifier which we'll use to get tokens later
-            var accountId = result.Account?.HomeAccountId?.Identifier ?? result.Account?.Username ?? string.Empty;
+            // Use HttpClient to call Microsoft Identity token endpoint directly
+            // This allows us to get the refresh token, which MSAL doesn't expose for confidential clients
+            using var httpClient = new HttpClient();
             
+            var tokenEndpoint = $"https://login.microsoftonline.com/{_settings.TenantId}/oauth2/v2.0/token";
+            
+            var requestBody = new Dictionary<string, string>
+            {
+                { "client_id", _settings.ClientId },
+                { "client_secret", _settings.ClientSecret },
+                { "grant_type", "authorization_code" },
+                { "code", code },
+                { "redirect_uri", _settings.RedirectUri },
+                { "code_verifier", codeVerifier },
+                { "scope", string.Join(" ", _settings.Scopes) }
+            };
+
+            var response = await httpClient.PostAsync(
+                tokenEndpoint,
+                new FormUrlEncodedContent(requestBody)
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError(
+                    "Token exchange failed with status {StatusCode}: {Error}",
+                    response.StatusCode,
+                    errorContent
+                );
+                throw new InvalidOperationException(
+                    $"Failed to exchange authorization code for tokens: {response.StatusCode}"
+                );
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var tokenData = System.Text.Json.JsonDocument.Parse(responseContent);
+            
+            var accessToken = tokenData.RootElement.GetProperty("access_token").GetString()
+                ?? throw new InvalidOperationException("No access token in response");
+            
+            var refreshToken = tokenData.RootElement.GetProperty("refresh_token").GetString()
+                ?? throw new InvalidOperationException("No refresh token in response");
+            
+            var expiresIn = tokenData.RootElement.GetProperty("expires_in").GetInt32();
+
+            _logger.LogInformation("Successfully exchanged authorization code for tokens");
+
             return new TokenResponse
             {
-                AccessToken = result.AccessToken,
-                RefreshToken = accountId, // Store account identifier for now
-                ExpiresIn = (int)(result.ExpiresOn - DateTimeOffset.UtcNow).TotalSeconds,
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                ExpiresIn = expiresIn
             };
         }
         finally
@@ -355,17 +527,74 @@ public class OutlookEmailProvider : IEmailProvider
         }
     }
 
-    private async Task<TokenResponse> RefreshAccessTokenAsync(string accountIdentifier)
+    private async Task<TokenResponse> RefreshAccessTokenAsync(string refreshToken)
     {
-        // For now, just throw an exception indicating re-authentication is needed
-        // MSAL's token cache doesn't persist between requests for confidential clients
-        // A proper solution would require implementing a persistent token cache
-        // or storing the refresh token directly and using the token endpoint
-        
-        _logger.LogWarning("Token refresh not supported - user needs to reconnect Outlook");
-        throw new InvalidOperationException(
-            "Access token expired. Please reconnect your Outlook account."
-        );
+        _logger.LogInformation("Refreshing Outlook access token using refresh token");
+
+        try
+        {
+            // Use HttpClient to call Microsoft Identity token endpoint directly
+            using var httpClient = new HttpClient();
+            
+            var tokenEndpoint = $"https://login.microsoftonline.com/{_settings.TenantId}/oauth2/v2.0/token";
+            
+            var requestBody = new Dictionary<string, string>
+            {
+                { "client_id", _settings.ClientId },
+                { "client_secret", _settings.ClientSecret },
+                { "grant_type", "refresh_token" },
+                { "refresh_token", refreshToken },
+                { "scope", string.Join(" ", _settings.Scopes) }
+            };
+
+            var response = await httpClient.PostAsync(
+                tokenEndpoint,
+                new FormUrlEncodedContent(requestBody)
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError(
+                    "Token refresh failed with status {StatusCode}: {Error}",
+                    response.StatusCode,
+                    errorContent
+                );
+                throw new InvalidOperationException(
+                    $"Failed to refresh access token: {response.StatusCode}"
+                );
+            }
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var tokenData = System.Text.Json.JsonDocument.Parse(responseContent);
+            
+            var accessToken = tokenData.RootElement.GetProperty("access_token").GetString()
+                ?? throw new InvalidOperationException("No access token in refresh response");
+            
+            var expiresIn = tokenData.RootElement.GetProperty("expires_in").GetInt32();
+            
+            // Refresh token may or may not be returned - if not, keep using the old one
+            var newRefreshToken = tokenData.RootElement.TryGetProperty("refresh_token", out var refreshProp)
+                ? refreshProp.GetString()
+                : refreshToken;
+
+            _logger.LogInformation("Successfully refreshed Outlook access token");
+
+            return new TokenResponse
+            {
+                AccessToken = accessToken,
+                RefreshToken = newRefreshToken ?? refreshToken,
+                ExpiresIn = expiresIn
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh Outlook access token");
+            throw new InvalidOperationException(
+                "Failed to refresh access token. Please reconnect your Outlook account.",
+                ex
+            );
+        }
     }
 
     private async Task<string> GetUserEmailAsync(string accessToken)

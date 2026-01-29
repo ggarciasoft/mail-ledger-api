@@ -146,7 +146,7 @@ public class GmailController : ControllerBase
             // Enqueue Hangfire background job
             var hangfireJobId =
                 Hangfire.BackgroundJob.Enqueue<Application.BackgroundJobs.EmailSyncBackgroundJob>(
-                    x => x.ExecuteAsync(job.Id, userId.Value, maxEmails, CancellationToken.None)
+                    x => x.ExecuteAsync(job.Id, userId.Value, Domain.Enums.EmailProvider.Gmail, maxEmails, CancellationToken.None)
                 );
 
             // Update job with Hangfire job ID

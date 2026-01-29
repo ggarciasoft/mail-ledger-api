@@ -8,6 +8,7 @@ public interface IEmailProvider
     Task<OAuthUrlResult> GetAuthorizationUrlAsync(Guid userId);
     Task<ConnectionResult> HandleOAuthCallbackAsync(string code, string state, Guid userId);
     Task<SyncResult> SyncEmailsAsync(Guid userId, SyncOptions options);
+    Task<SyncResult> PerformSyncAsync(Guid userId, SyncOptions options, CancellationToken cancellationToken = default);
     Task<ConnectionStatus> GetConnectionStatusAsync(Guid userId);
     Task DisconnectAsync(Guid userId);
 }

@@ -8,59 +8,27 @@ using Microsoft.Extensions.Logging;
 namespace MainLedger.Application.BackgroundJobs;
 
 /// <summary>
-/// Background job for syncing emails from Gmail.
+/// Background job for syncing emails from email providers (Gmail, Outlook, etc.).
 /// </summary>
-public class EmailSyncBackgroundJob
-{
-    private readonly IGmailService _gmailService;
-    private readonly IEmailConnectionRepository _connectionRepository;
-    private readonly IEmailMessageRepository _emailRepository;
-    private readonly IRuleRepository _ruleRepository;
-    private readonly IRulesEngine _rulesEngine;
-    private readonly IProcessingJobRepository _jobRepository;
-    private readonly IEmailSyncHistoryRepository _syncHistoryRepository;
-    private readonly IJobNotificationService _jobNotificationService;
-    private readonly ISubscriptionService _subscriptionService;
-    private readonly IEmailService _emailService;
-    private readonly IUserRepository _userRepository;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly ILogger<EmailSyncBackgroundJob> _logger;
-
-    public EmailSyncBackgroundJob(
-        IGmailService gmailService,
-        IEmailConnectionRepository connectionRepository,
-        IEmailMessageRepository emailRepository,
-        IRuleRepository ruleRepository,
-        IRulesEngine rulesEngine,
-        IProcessingJobRepository jobRepository,
-        IEmailSyncHistoryRepository syncHistoryRepository,
-        IJobNotificationService jobNotificationService,
-        ISubscriptionService subscriptionService,
-        IEmailService emailService,
-        IUserRepository userRepository,
-        IUnitOfWork unitOfWork,
-        ILogger<EmailSyncBackgroundJob> logger
+public class EmailSyncBackgroundJob(
+    IEmailProviderFactory _providerFactory,
+    IEmailConnectionRepository _connectionRepository,
+    IProcessingJobRepository _jobRepository,
+    IEmailSyncHistoryRepository _syncHistoryRepository,
+    IJobNotificationService _jobNotificationService,
+    ISubscriptionService _subscriptionService,
+    IEmailService _emailService,
+    IUserRepository _userRepository,
+    IUnitOfWork _unitOfWork,
+    IRuleRepository _ruleRepository,
+    ILogger<EmailSyncBackgroundJob> _logger
     )
-    {
-        _gmailService = gmailService;
-        _connectionRepository = connectionRepository;
-        _emailRepository = emailRepository;
-        _ruleRepository = ruleRepository;
-        _rulesEngine = rulesEngine;
-        _jobRepository = jobRepository;
-        _syncHistoryRepository = syncHistoryRepository;
-        _jobNotificationService = jobNotificationService;
-        _subscriptionService = subscriptionService;
-        _emailService = emailService;
-        _userRepository = userRepository;
-        _unitOfWork = unitOfWork;
-        _logger = logger;
-    }
-
+{
     [AutomaticRetry(Attempts = 3)]
     public async Task ExecuteAsync(
         Guid jobId,
         Guid userId,
+        EmailProvider provider,
         int maxEmails,
         CancellationToken cancellationToken
     )
@@ -75,39 +43,43 @@ public class EmailSyncBackgroundJob
         try
         {
             _logger.LogInformation(
-                "Starting email sync job {JobId} for user {UserId}",
+                "Starting email sync job {JobId} for user {UserId} with provider {Provider}",
                 jobId,
-                userId
+                userId,
+                provider
             );
 
             var connection = await _connectionRepository.GetByUserAndProviderAsync(
                 userId,
-                EmailProvider.Gmail
+                provider
             );
             if (connection == null)
             {
-                job.Fail("No active Gmail connection found.");
+                job.Fail($"No active {provider} connection found.");
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 return;
             }
 
+            // Get the email provider
+            var emailProvider = _providerFactory.GetProvider(provider);
+
             // Load user's active rules
             var rules = await _ruleRepository.GetActiveByUserIdAsync(userId, cancellationToken);
 
-            // Create sync history record (EmailConnection doesn't have HistoryId, so we pass null)
-            var syncHistory = EmailSyncHistory.Create(userId, EmailProvider.Gmail, null);
+            // Create sync history record
+            var syncHistory = EmailSyncHistory.Create(userId, provider, null);
             await _syncHistoryRepository.AddAsync(syncHistory, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Fetch emails
-            var fetchedEmails = await _gmailService.FetchEmailsAsync(
-                connection,
-                rules.Any() ? rules : null,
-                connection.LastSyncedAt,
-                null,
-                maxEmails,
-                cancellationToken
-            );
+            // Sync emails using provider-specific internal methods
+            var syncOptions = new Domain.Services.SyncOptions
+            {
+                SyncFrom = connection.LastSyncedAt,
+                MaxResults = maxEmails
+            };
+
+            // Call provider's internal sync method (not the public API which enqueues jobs)
+            var syncResult = await emailProvider.PerformSyncAsync(userId, syncOptions, cancellationToken);
 
             // Check subscription limits
             var canProcessEmails = await _subscriptionService.CanProcessEmailAsync(
@@ -125,107 +97,14 @@ public class EmailSyncBackgroundJob
                 return;
             }
 
-            job.Start(fetchedEmails.Count);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            int savedCount = 0;
-            int ignoredCount = 0;
-            int processedCount = 0;
-
-            foreach (var email in fetchedEmails)
-            {
-                // Check if job has been cancelled
-                var currentJob = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
-                if (currentJob?.Status == Domain.Enums.JobStatus.Cancelled)
-                {
-                    _logger.LogInformation("Job {JobId} was cancelled, stopping email sync", jobId);
-                    return;
-                }
-
-                // Check cancellation token
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInformation(
-                        "Cancellation requested for job {JobId}, stopping email sync",
-                        jobId
-                    );
-                    job.Cancel();
-                    await _unitOfWork.SaveChangesAsync(CancellationToken.None);
-                    return;
-                }
-
-                try
-                {
-                    // Deduplicate
-                    if (
-                        await _emailRepository.ExistsByContentHashAsync(
-                            email.ContentHash,
-                            cancellationToken
-                        )
-                    )
-                    {
-                        ignoredCount++;
-                        processedCount++;
-                        continue;
-                    }
-
-                    // Run through Rules Engine
-                    var evaluation = await _rulesEngine.EvaluateAsync(
-                        email,
-                        rules,
-                        cancellationToken
-                    );
-                    email.SetDirective(evaluation);
-
-                    if (evaluation.ShouldProcess)
-                    {
-                        await _emailRepository.AddAsync(email, cancellationToken);
-                        savedCount++;
-
-                        // Note: Email sync does NOT increment subscription count
-                        // Only classification/extraction counts as "processing"
-                    }
-                    else
-                    {
-                        ignoredCount++;
-                    }
-
-                    processedCount++;
-
-                    // Update progress every 5 emails
-                    if (processedCount % 5 == 0)
-                    {
-                        job.UpdateProgress(processedCount, savedCount, ignoredCount);
-                        await _unitOfWork.SaveChangesAsync(cancellationToken);
-                        await _jobNotificationService.NotifyJobUpdated(userId, job);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "Error processing email {Id} for job {JobId}",
-                        email.Id,
-                        jobId
-                    );
-                    ignoredCount++;
-                    processedCount++;
-                }
-            }
-
-            // Update connection last sync time
-            if (fetchedEmails.Count > 0)
-            {
-                connection.LastSyncedAt = DateTime.UtcNow;
-                await _connectionRepository.UpdateAsync(connection);
-            }
-
-            // Final update
-            job.UpdateProgress(processedCount, savedCount, ignoredCount);
+            // Update job with sync results
+            var totalEmails = syncResult.EmailsSynced + syncResult.EmailsSkipped;
+            job.Start(totalEmails);
+            job.UpdateProgress(totalEmails, syncResult.EmailsSynced, syncResult.EmailsSkipped);
             job.Complete();
 
             // Complete sync history
-            syncHistory.Complete(fetchedEmails.Count, savedCount, true);
+            syncHistory.Complete(totalEmails, syncResult.EmailsSynced, true);
             await _syncHistoryRepository.UpdateAsync(syncHistory, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -242,19 +121,21 @@ public class EmailSyncBackgroundJob
                     EmailType.EmailSyncComplete,
                     new Dictionary<string, string>
                     {
-                        { "EmailCount", fetchedEmails.Count.ToString() },
-                        { "NewEmailCount", savedCount.ToString() },
+                        { "EmailCount", totalEmails.ToString() },
+                        { "NewEmailCount", syncResult.EmailsSynced.ToString() },
+                        { "Provider", provider.ToString() },
                     },
                     cancellationToken
                 );
             }
 
             _logger.LogInformation(
-                "Email sync job {JobId} completed: {Fetched} fetched, {Saved} saved, {Ignored} ignored",
+                "{Provider} sync job {JobId} completed: {Total} total, {Synced} synced, {Skipped} skipped",
+                provider,
                 jobId,
-                fetchedEmails.Count,
-                savedCount,
-                ignoredCount
+                totalEmails,
+                syncResult.EmailsSynced,
+                syncResult.EmailsSkipped
             );
         }
         catch (Exception ex)

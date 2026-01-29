@@ -7,6 +7,8 @@ public class EmailDto
 {
     public Guid Id { get; init; }
     public string MessageId { get; init; } = string.Empty;
+    public string ThreadId { get; init; } = string.Empty;
+    public string Provider { get; init; } = string.Empty; // "Gmail" or "Outlook"
     public string Subject { get; init; } = string.Empty;
     public string From { get; init; } = string.Empty;
     public DateTime ReceivedAt { get; init; }

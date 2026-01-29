@@ -288,6 +288,7 @@ public class GmailService : IGmailService
                     fullMsg.Id,
                     fullMsg.ThreadId,
                     connection.UserId,
+                    EmailProvider.Gmail,
                     subject,
                     EmailAddress.Create(cleanEmail),
                     receivedAt.ToUniversalTime(),

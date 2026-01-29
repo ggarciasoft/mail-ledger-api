@@ -64,7 +64,7 @@ public class SequentialPipelineJob
         if (syncJob != null)
         {
             var syncHangfireId = BackgroundJob.Enqueue<EmailSyncBackgroundJob>(x =>
-                x.ExecuteAsync(syncJob.Id, userId, syncBatchSize, CancellationToken.None)
+                x.ExecuteAsync(syncJob.Id, userId, EmailProvider.Gmail, syncBatchSize, CancellationToken.None)
             );
 
             syncJob.SetHangfireJobId(syncHangfireId);

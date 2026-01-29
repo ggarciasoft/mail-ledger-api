@@ -57,6 +57,8 @@ public class GetEmailsQueryHandler
             {
                 Id = email.Id,
                 MessageId = email.MessageId,
+                ThreadId = email.ThreadId,
+                Provider = email.Provider.ToString(),
                 Subject = email.Subject,
                 From = email.From.Value,
                 ReceivedAt = email.ReceivedAt,

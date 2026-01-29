@@ -13,6 +13,7 @@ public sealed class EmailMessage : Entity
     public string MessageId { get; private set; }
     public string ThreadId { get; private set; }
     public Guid UserId { get; private set; }
+    public EmailProvider Provider { get; private set; } // Gmail or Outlook
     public string Subject { get; private set; }
     public EmailAddress From { get; private set; }
     public DateTime ReceivedAt { get; private set; }
@@ -43,6 +44,7 @@ public sealed class EmailMessage : Entity
         string messageId,
         string threadId,
         Guid userId,
+        EmailProvider provider,
         string subject,
         EmailAddress from,
         DateTime receivedAt,
@@ -60,6 +62,7 @@ public sealed class EmailMessage : Entity
         MessageId = messageId;
         ThreadId = threadId;
         UserId = userId;
+        Provider = provider;
         Subject = subject ?? string.Empty;
         From = from ?? throw new ArgumentNullException(nameof(from));
         ReceivedAt = receivedAt;
@@ -77,6 +80,7 @@ public sealed class EmailMessage : Entity
         string messageId,
         string threadId,
         Guid userId,
+        EmailProvider provider,
         string subject,
         EmailAddress from,
         DateTime receivedAt,
@@ -88,6 +92,7 @@ public sealed class EmailMessage : Entity
             messageId,
             threadId,
             userId,
+            provider,
             subject,
             from,
             receivedAt,

@@ -51,7 +51,7 @@ public class RecurringEmailSyncJob
         if (job != null)
         {
             var hangfireJobId = BackgroundJob.Enqueue<EmailSyncBackgroundJob>(x =>
-                x.ExecuteAsync(job.Id, userId, batchSize, CancellationToken.None)
+                x.ExecuteAsync(job.Id, userId, EmailProvider.Gmail, batchSize, CancellationToken.None)
             );
 
             job.SetHangfireJobId(hangfireJobId);
