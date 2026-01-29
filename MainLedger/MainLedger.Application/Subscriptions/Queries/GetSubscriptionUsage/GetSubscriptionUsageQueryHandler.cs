@@ -13,18 +13,21 @@ public class GetSubscriptionUsageQueryHandler
     private readonly IApiKeyRepository _apiKeyRepository;
     private readonly IEmailConnectionRepository _emailConnectionRepository;
     private readonly IUserSubscriptionRepository _userSubscriptionRepository;
+    private readonly IWebhookEndpointRepository _webhookEndpointRepository;
 
     public GetSubscriptionUsageQueryHandler(
         ISubscriptionService subscriptionService,
         IApiKeyRepository apiKeyRepository,
         IEmailConnectionRepository emailConnectionRepository,
-        IUserSubscriptionRepository userSubscriptionRepository
+        IUserSubscriptionRepository userSubscriptionRepository,
+        IWebhookEndpointRepository webhookEndpointRepository
     )
     {
         _subscriptionService = subscriptionService;
         _apiKeyRepository = apiKeyRepository;
         _emailConnectionRepository = emailConnectionRepository;
         _userSubscriptionRepository = userSubscriptionRepository;
+        _webhookEndpointRepository = webhookEndpointRepository;
     }
 
     public async Task<SubscriptionUsageDto> Handle(
@@ -57,6 +60,10 @@ public class GetSubscriptionUsageQueryHandler
             EmailProvider.Gmail,
             cancellationToken
         );
+        var webhooksCount = await _webhookEndpointRepository.CountByUserIdAsync(
+            request.UserId,
+            cancellationToken
+        );
 
         return new SubscriptionUsageDto(
             subscription.EmailsClassifiedThisMonth,
@@ -66,7 +73,9 @@ public class GetSubscriptionUsageQueryHandler
             emailAccountsCount,
             limits.MaxEmailAccounts,
             apiKeysCount,
-            limits.MaxApiKeys
+            limits.MaxApiKeys,
+            webhooksCount,
+            limits.MaxWebhooks
         );
     }
 }

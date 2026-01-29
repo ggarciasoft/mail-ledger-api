@@ -47,7 +47,9 @@ public record SubscriptionUsageDto(
     int EmailAccountsConnected,
     int EmailAccountsLimit,
     int ApiKeysCreated,
-    int ApiKeysLimit
+    int ApiKeysLimit,
+    int WebhooksCreated,
+    int WebhooksLimit
 );
 
 /// <summary>
