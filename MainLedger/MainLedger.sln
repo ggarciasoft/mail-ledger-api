@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.12.35527.113 d17.12
+# Visual Studio Version 18
+VisualStudioVersion = 18.2.11415.280
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MainLedger.API", "MainLedger.API\MainLedger.API.csproj", "{EB64CAF0-8D67-4633-B6B2-2F0EFBF1B2A9}"
 EndProject
@@ -16,6 +16,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MainLedger.Shared", "MainLedger.Shared\MainLedger.Shared.csproj", "{60D651BF-9CC1-430F-8D1B-CDE39A57D560}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MainLedger.Infrastructure", "MainLedger.Infrastructure\MainLedger.Infrastructure.csproj", "{04DF0B2D-D314-4D57-95C9-7B38AF259582}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MailLedger.IntegrationTests", "MailLedger.IntegrationTests\MailLedger.IntegrationTests.csproj", "{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,8 +53,15 @@ Global
 		{04DF0B2D-D314-4D57-95C9-7B38AF259582}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{04DF0B2D-D314-4D57-95C9-7B38AF259582}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{04DF0B2D-D314-4D57-95C9-7B38AF259582}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A1B4365F-3CB1-4634-BD5C-3B3ADFF88BAD}
 	EndGlobalSection
 EndGlobal

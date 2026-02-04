@@ -33,9 +33,16 @@ public class WebhookEndpointRepository : IWebhookEndpointRepository
         WebhookEventType eventType, 
         CancellationToken cancellationToken = default)
     {
-        return await _context.WebhookEndpoints
-            .Where(w => w.UserId == userId && w.IsActive && w.Events.Contains(eventType))
+        // Load active webhooks for user into memory first
+        // Then filter by event type client-side (Events is JSON, can't be queried in SQL)
+        var activeEndpoints = await _context.WebhookEndpoints
+            .Where(w => w.UserId == userId && w.IsActive)
             .ToListAsync(cancellationToken);
+        
+        // Filter by event type in memory
+        return activeEndpoints
+            .Where(w => w.Events.Contains(eventType))
+            .ToList();
     }
 
     public async Task AddAsync(WebhookEndpoint webhookEndpoint, CancellationToken cancellationToken = default)
