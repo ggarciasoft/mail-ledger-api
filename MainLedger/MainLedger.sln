@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MainLedger.Infrastructure",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MailLedger.IntegrationTests", "MailLedger.IntegrationTests\MailLedger.IntegrationTests.csproj", "{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MailLedger.PlaygroundProject", "MailLedger.PlaygroundProject\MailLedger.PlaygroundProject.csproj", "{F5B75D51-0821-4224-9D96-05C720AFB6BD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,6 +59,10 @@ Global
 		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3CD5A91D-E2F8-6F3F-C1A4-7660BAAD33F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F5B75D51-0821-4224-9D96-05C720AFB6BD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5B75D51-0821-4224-9D96-05C720AFB6BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5B75D51-0821-4224-9D96-05C720AFB6BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5B75D51-0821-4224-9D96-05C720AFB6BD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

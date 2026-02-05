@@ -451,6 +451,13 @@ namespace MainLedger.API
                     job => job.ExecuteAsync(CancellationToken.None),
                     Hangfire.Cron.Minutely
                 );
+
+                // Webhook retry job - runs every 5 minutes to clean up stuck pending deliveries
+                Hangfire.RecurringJob.AddOrUpdate<MainLedger.Application.BackgroundJobs.RecurringWebhookRetryJob>(
+                    "webhook-retry-cleanup",
+                    job => job.ExecuteAsync(),
+                    "*/5 * * * *" // Every 5 minutes
+                );
             }
 
             app.UseHttpsRedirection();

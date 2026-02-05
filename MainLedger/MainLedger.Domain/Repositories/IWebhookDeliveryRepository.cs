@@ -39,4 +39,9 @@ public interface IWebhookDeliveryRepository
     /// Delete old webhook deliveries (for cleanup)
     /// </summary>
     Task DeleteOlderThanAsync(DateTime cutoffDate, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Get webhook deliveries stuck in Pending status older than the cutoff time
+    /// </summary>
+    Task<List<WebhookDelivery>> GetStuckPendingDeliveriesAsync(DateTime cutoffTime, CancellationToken cancellationToken = default);
 }

@@ -80,4 +80,13 @@ public class WebhookDeliveryRepository : IWebhookDeliveryRepository
         _context.WebhookDeliveries.RemoveRange(oldDeliveries);
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<List<WebhookDelivery>> GetStuckPendingDeliveriesAsync(DateTime cutoffTime, CancellationToken cancellationToken = default)
+    {
+        return await _context.WebhookDeliveries
+            .Include(d => d.WebhookEndpoint)
+            .Where(d => d.Status == WebhookDeliveryStatus.Pending && d.CreatedAt < cutoffTime)
+            .OrderBy(d => d.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
 }

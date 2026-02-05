@@ -5,30 +5,29 @@ using MainLedger.Application.Common.Interfaces;
 using MainLedger.Domain.Entities;
 using MainLedger.Domain.Enums;
 using MainLedger.Domain.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace MainLedger.Infrastructure.Services;
 
 public class WebhookService : IWebhookService
 {
-    private readonly IWebhookEndpointRepository _webhookEndpointRepository;
-    private readonly IWebhookDeliveryRepository _webhookDeliveryRepository;
+    private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<WebhookService> _logger;
 
-    private static readonly int[] RetryDelaysMs = { 1000, 5000, 15000 }; // 1s, 5s, 15s
+    private static readonly int[] RetryDelaysMs = { 2000, 4000, 8000 }; // 2s, 4s, 8s
 
     public WebhookService(
-        IWebhookEndpointRepository webhookEndpointRepository,
-        IWebhookDeliveryRepository webhookDeliveryRepository,
+        IServiceScopeFactory serviceScopeFactory,
         IHttpClientFactory httpClientFactory,
         ILogger<WebhookService> logger)
     {
-        _webhookEndpointRepository = webhookEndpointRepository;
-        _webhookDeliveryRepository = webhookDeliveryRepository;
+        _serviceScopeFactory = serviceScopeFactory;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
+
 
     public async Task TriggerWebhooksAsync(
         Guid userId, 
@@ -36,8 +35,12 @@ public class WebhookService : IWebhookService
         object payload, 
         CancellationToken cancellationToken = default)
     {
+        using var scope = _serviceScopeFactory.CreateScope();
+        var webhookEndpointRepository = scope.ServiceProvider.GetRequiredService<IWebhookEndpointRepository>();
+        var webhookDeliveryRepository = scope.ServiceProvider.GetRequiredService<IWebhookDeliveryRepository>();
+
         // Get active webhook endpoints for this user and event type
-        var endpoints = await _webhookEndpointRepository.GetActiveByUserIdAndEventTypeAsync(
+        var endpoints = await webhookEndpointRepository.GetActiveByUserIdAndEventTypeAsync(
             userId, 
             eventType, 
             cancellationToken);
@@ -69,15 +72,53 @@ public class WebhookService : IWebhookService
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _webhookDeliveryRepository.AddAsync(delivery, cancellationToken);
+            await webhookDeliveryRepository.AddAsync(delivery, cancellationToken);
 
-            // Trigger delivery in background (don't await)
-            _ = Task.Run(async () => await DeliverWebhookAsync(endpoint, delivery), cancellationToken);
+            // Trigger delivery in background with new scope (pass IDs, not entities)
+            var deliveryId = delivery.Id;
+            var endpointId = endpoint.Id;
+            
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await DeliverWebhookAsync(endpointId, deliveryId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, 
+                        "Unhandled exception in webhook delivery background task for delivery {DeliveryId}", 
+                        deliveryId);
+                }
+            });
         }
     }
 
-    private async Task DeliverWebhookAsync(WebhookEndpoint endpoint, WebhookDelivery delivery)
+
+    private async Task DeliverWebhookAsync(Guid endpointId, Guid deliveryId)
     {
+        _logger.LogInformation("DeliverWebhookAsync started for endpoint {EndpointId}, delivery {DeliveryId}", 
+            endpointId, deliveryId);
+
+        // Create new scope for background task
+        using var scope = _serviceScopeFactory.CreateScope();
+        var webhookEndpointRepository = scope.ServiceProvider.GetRequiredService<IWebhookEndpointRepository>();
+        var webhookDeliveryRepository = scope.ServiceProvider.GetRequiredService<IWebhookDeliveryRepository>();
+
+        _logger.LogDebug("Loading endpoint and delivery from database...");
+
+        // Load endpoint and delivery
+        var endpoint = await webhookEndpointRepository.GetByIdAsync(endpointId);
+        var delivery = await webhookDeliveryRepository.GetByIdAsync(deliveryId);
+
+        if (endpoint == null || delivery == null)
+        {
+            _logger.LogError("Webhook endpoint or delivery not found (Endpoint: {EndpointId}, Delivery: {DeliveryId})", 
+                endpointId, deliveryId);
+            return;
+        }
+
+
         var httpClient = _httpClientFactory.CreateClient();
         httpClient.Timeout = TimeSpan.FromSeconds(30);
 
@@ -120,11 +161,11 @@ public class WebhookService : IWebhookService
                 {
                     // Success!
                     delivery.Status = WebhookDeliveryStatus.Success;
-                    await _webhookDeliveryRepository.UpdateAsync(delivery);
+                    await webhookDeliveryRepository.UpdateAsync(delivery);
 
                     // Update endpoint's last triggered timestamp
                     endpoint.LastTriggeredAt = DateTime.UtcNow;
-                    await _webhookEndpointRepository.UpdateAsync(endpoint);
+                    await webhookEndpointRepository.UpdateAsync(endpoint);
 
                     _logger.LogInformation(
                         "Webhook delivered successfully to {Url} for event {EventType} (Delivery ID: {DeliveryId})",
@@ -149,7 +190,7 @@ public class WebhookService : IWebhookService
             }
 
             // Save attempt
-            await _webhookDeliveryRepository.UpdateAsync(delivery);
+            await webhookDeliveryRepository.UpdateAsync(delivery);
 
             // Retry with exponential backoff (if not last attempt)
             if (attempt < 2)
@@ -160,7 +201,7 @@ public class WebhookService : IWebhookService
 
         // All retries failed
         delivery.Status = WebhookDeliveryStatus.Failed;
-        await _webhookDeliveryRepository.UpdateAsync(delivery);
+        await webhookDeliveryRepository.UpdateAsync(delivery);
 
         _logger.LogError(
             "Webhook delivery failed after 3 attempts to {Url} for event {EventType} (Delivery ID: {DeliveryId})",
@@ -169,14 +210,18 @@ public class WebhookService : IWebhookService
 
     public string GenerateSignature(string payload, string secretKey)
     {
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secretKey));
-        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
-        return Convert.ToBase64String(hash);
+        var keyBytes = Encoding.UTF8.GetBytes(secretKey);
+        var payloadBytes = Encoding.UTF8.GetBytes(payload);
+
+        using var hmac = new HMACSHA256(keyBytes);
+        var hashBytes = hmac.ComputeHash(payloadBytes);
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
     public bool ValidateSignature(string payload, string signature, string secretKey)
     {
         var expectedSignature = GenerateSignature(payload, secretKey);
-        return signature == expectedSignature;
+        return string.Equals(signature, expectedSignature, StringComparison.OrdinalIgnoreCase);
     }
 }
+

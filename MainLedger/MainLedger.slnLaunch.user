@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "MainLedger.API\\MainLedger.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "MailLedger.PlaygroundProject\\MailLedger.PlaygroundProject.csproj",
+        "Action": "StartWithoutDebugging"
+      }
+    ]
+  }
+]
