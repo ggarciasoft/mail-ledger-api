@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
     <PackageReference Include="Google.Apis.Gmail.v1" Version="1.73.0.3987" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.2" />
     <PackageReference Include="Microsoft.Graph" Version="5.87.0" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.67.0" />
     <PackageReference Include="OpenAI" Version="2.8.0" />

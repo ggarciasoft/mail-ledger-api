@@ -249,6 +249,24 @@ namespace MainLedger.API
                 MainLedger.Application.Services.SubscriptionService
             >();
 
+            // Configure Stripe Payment Integration
+            builder.Services.Configure<MainLedger.Domain.Settings.StripeSettings>(
+                builder.Configuration.GetSection("Stripe")
+            );
+
+            // Set Stripe API Key globally
+            var stripeSettings = builder.Configuration.GetSection("Stripe").Get<MainLedger.Domain.Settings.StripeSettings>();
+            if (stripeSettings != null && !string.IsNullOrEmpty(stripeSettings.SecretKey))
+            {
+                Stripe.StripeConfiguration.ApiKey = stripeSettings.SecretKey;
+            }
+
+            // Register Payment Provider
+            builder.Services.AddScoped<
+                MainLedger.Application.Common.Interfaces.IPaymentProvider,
+                MainLedger.Infrastructure.Payment.StripePaymentProvider
+            >();
+
             // Register SignalR
             builder.Services.AddSignalR();
 

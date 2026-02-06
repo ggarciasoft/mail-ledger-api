@@ -12,6 +12,10 @@ public interface IUserSubscriptionRepository
         Guid userId,
         CancellationToken cancellationToken = default
     );
+    Task<UserSubscription?> GetByStripeSubscriptionIdAsync(
+        string stripeSubscriptionId,
+        CancellationToken cancellationToken = default
+    );
     Task<List<UserSubscription>> GetExpiredSubscriptionsAsync(
         CancellationToken cancellationToken = default
     );

@@ -17,6 +17,9 @@ public class SubscriptionPlan : Entity
     public string Description { get; private set; } = string.Empty;
     public decimal MonthlyPrice { get; private set; }
 
+    // Payment provider integration
+    public string? StripePriceId { get; private set; }
+
     // Email processing limits
     public int ClassificationLimit { get; private set; }
     public int ExtractionLimit { get; private set; }
@@ -94,5 +97,10 @@ public class SubscriptionPlan : Entity
     public void UpdatePricing(decimal newPrice)
     {
         MonthlyPrice = newPrice;
+    }
+
+    public void SetStripePriceId(string priceId)
+    {
+        StripePriceId = priceId;
     }
 }

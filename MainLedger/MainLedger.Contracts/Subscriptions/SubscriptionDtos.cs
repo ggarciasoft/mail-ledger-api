@@ -61,3 +61,13 @@ public record UpgradeSubscriptionRequest(Guid PlanId);
 /// Request to cancel subscription.
 /// </summary>
 public record CancelSubscriptionRequest(string Reason);
+
+/// <summary>
+/// Request to create a Stripe Checkout session.
+/// </summary>
+public record CreateCheckoutSessionRequest(Guid PlanId);
+
+/// <summary>
+/// Response containing Stripe Checkout URL.
+/// </summary>
+public record CreateCheckoutSessionResponse(string CheckoutUrl);

@@ -34,6 +34,16 @@ public class UserSubscriptionRepository : IUserSubscriptionRepository
             .FirstOrDefaultAsync(s => s.UserId == userId, cancellationToken);
     }
 
+    public async Task<UserSubscription?> GetByStripeSubscriptionIdAsync(
+        string stripeSubscriptionId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await _context
+            .UserSubscriptions.Include(s => s.SubscriptionPlan)
+            .FirstOrDefaultAsync(s => s.StripeSubscriptionId == stripeSubscriptionId, cancellationToken);
+    }
+
     public async Task<List<UserSubscription>> GetExpiredSubscriptionsAsync(
         CancellationToken cancellationToken = default
     )

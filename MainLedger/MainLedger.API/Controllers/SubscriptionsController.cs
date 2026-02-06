@@ -1,5 +1,7 @@
 using MainLedger.Application.Authentication.Services;
 using MainLedger.Application.Subscriptions.Commands.CancelSubscription;
+using MainLedger.Application.Subscriptions.Commands.CreateCheckoutSession;
+using MainLedger.Application.Subscriptions.Commands.HandleStripeWebhook;
 using MainLedger.Application.Subscriptions.Commands.UpgradeSubscription;
 using MainLedger.Application.Subscriptions.Queries.GetSubscriptionPlans;
 using MainLedger.Application.Subscriptions.Queries.GetSubscriptionUsage;
@@ -189,6 +191,83 @@ public class SubscriptionsController : ControllerBase
         {
             _logger.LogError(ex, "Error cancelling subscription for user {UserId}", userId);
             return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Create a Stripe Checkout session for subscription payment.
+    /// </summary>
+    [HttpPost("checkout")]
+    public async Task<ActionResult<CreateCheckoutSessionResponse>> CreateCheckoutSession(
+        [FromBody] CreateCheckoutSessionRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var userId = _currentUserService.GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized(new { error = "User not authenticated" });
+        }
+
+        try
+        {
+            var command = new CreateCheckoutSessionCommand(userId.Value, request.PlanId);
+            var checkoutUrl = await _mediator.Send(command, cancellationToken);
+
+            return Ok(new CreateCheckoutSessionResponse(checkoutUrl));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating checkout session for user {UserId}", userId);
+            return BadRequest(new { error = "Failed to create checkout session" });
+        }
+    }
+
+    /// <summary>
+    /// Stripe webhook endpoint for subscription events.
+    /// </summary>
+    [HttpPost("webhook")]
+    [AllowAnonymous] // Webhooks come from Stripe, not authenticated users
+    public async Task<IActionResult> StripeWebhook(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Read raw body
+            using var reader = new StreamReader(HttpContext.Request.Body);
+            var payload = await reader.ReadToEndAsync(cancellationToken);
+
+            // Get Stripe signature header
+            var signature = Request.Headers["Stripe-Signature"].ToString();
+
+            if (string.IsNullOrEmpty(signature))
+            {
+                _logger.LogWarning("Webhook received without Stripe-Signature header");
+                return BadRequest(new { error = "Missing Stripe-Signature header" });
+            }
+
+            // Process webhook
+            var command = new HandleStripeWebhookCommand(payload, signature);
+            await _mediator.Send(command, cancellationToken);
+
+            return Ok();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized webhook attempt");
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing Stripe webhook");
+            return BadRequest(new { error = "Failed to process webhook" });
         }
     }
 }
