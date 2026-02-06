@@ -107,6 +107,7 @@ namespace MainLedger.API
                 PasswordResetTokenRepository
             >();
             builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+            builder.Services.AddScoped<IExternalLoginRepository, ExternalLoginRepository>();
             builder.Services.AddScoped<IProcessingJobRepository, ProcessingJobRepository>();
             builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
             builder.Services.AddScoped<IEmailConnectionRepository, EmailConnectionRepository>();
@@ -294,6 +295,21 @@ namespace MainLedger.API
             builder.Services.AddScoped<
                 MainLedger.Application.Common.Interfaces.IGmailService,
                 MainLedger.Integrations.Services.GmailService
+            >();
+
+            // Configure OAuth SSO Settings
+            builder.Services.Configure<MainLedger.Domain.Settings.GoogleOAuthSettings>(
+                builder.Configuration.GetSection("OAuthSSO:Google")
+            );
+
+            builder.Services.Configure<MainLedger.Domain.Settings.MicrosoftOAuthSettings>(
+                builder.Configuration.GetSection("OAuthSSO:Microsoft")
+            );
+
+            // Register OAuth Service with HttpClient
+            builder.Services.AddHttpClient<
+                MainLedger.Application.Common.Interfaces.IOAuthService,
+                MainLedger.Infrastructure.Services.OAuthService
             >();
 
             // Register Outlook Integration

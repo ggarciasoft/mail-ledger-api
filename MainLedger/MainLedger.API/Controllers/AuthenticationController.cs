@@ -253,4 +253,118 @@ public class AuthenticationController : ControllerBase
             return StatusCode(500, new { error = "An error occurred during password change" });
         }
     }
+
+    /// <summary>
+    /// Get Google OAuth authorization URL.
+    /// </summary>
+    [HttpGet("google/url")]
+    public async Task<ActionResult<OAuthUrlResponse>> GetGoogleAuthUrl(
+        [FromQuery] string? returnUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var state = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            var command = new GetOAuthUrlCommand("google", state);
+            var url = await _mediator.Send(command, cancellationToken);
+
+            return Ok(new OAuthUrlResponse(url, state));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Google OAuth URL");
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
+
+    /// <summary>
+    /// Handle Google OAuth callback.
+    /// </summary>
+    [HttpPost("google/callback")]
+    public async Task<ActionResult<LoginResponse>> GoogleCallback(
+        [FromBody] OAuthCallbackRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+            var command = new GoogleOAuthCommand(request.Code, ipAddress, userAgent);
+            var result = await _mediator.Send(command, cancellationToken);
+
+            return Ok(new LoginResponse(
+                result.UserId,
+                result.AccessToken,
+                result.RefreshToken,
+                result.ExpiresIn));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Google OAuth authentication failed");
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Google OAuth callback");
+            return StatusCode(500, new { error = "An error occurred during authentication" });
+        }
+    }
+
+    /// <summary>
+    /// Get Microsoft OAuth authorization URL.
+    /// </summary>
+    [HttpGet("microsoft/url")]
+    public async Task<ActionResult<OAuthUrlResponse>> GetMicrosoftAuthUrl(
+        [FromQuery] string? returnUrl = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var state = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            var command = new GetOAuthUrlCommand("microsoft", state);
+            var url = await _mediator.Send(command, cancellationToken);
+
+            return Ok(new OAuthUrlResponse(url, state));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Microsoft OAuth URL");
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
+
+    /// <summary>
+    /// Handle Microsoft OAuth callback.
+    /// </summary>
+    [HttpPost("microsoft/callback")]
+    public async Task<ActionResult<LoginResponse>> MicrosoftCallback(
+        [FromBody] OAuthCallbackRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+            var command = new MicrosoftOAuthCommand(request.Code, ipAddress, userAgent);
+            var result = await _mediator.Send(command, cancellationToken);
+
+            return Ok(new LoginResponse(
+                result.UserId,
+                result.AccessToken,
+                result.RefreshToken,
+                result.ExpiresIn));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Microsoft OAuth authentication failed");
+            return Unauthorized(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Microsoft OAuth callback");
+            return StatusCode(500, new { error = "An error occurred during authentication" });
+        }
+    }
 }

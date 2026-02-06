@@ -83,6 +83,35 @@ public sealed class User : Entity
     }
 
     /// <summary>
+    /// Registers a new user via SSO (no password required).
+    /// </summary>
+    public static User RegisterWithSSO(
+        EmailAddress email,
+        string firstName,
+        string lastName
+    )
+    {
+        if (string.IsNullOrWhiteSpace(firstName))
+            throw new ArgumentException("First name cannot be empty.", nameof(firstName));
+        if (string.IsNullOrWhiteSpace(lastName))
+            throw new ArgumentException("Last name cannot be empty.", nameof(lastName));
+
+        var now = DateTime.UtcNow;
+        return new User(
+            Guid.NewGuid(),
+            email,
+            string.Empty, // SSO users don't have passwords
+            firstName,
+            lastName,
+            isEmailVerified: true, // SSO users are auto-verified
+            isActive: true, // SSO users are auto-activated
+            createdAt: now,
+            updatedAt: now,
+            lastLoginAt: null
+        );
+    }
+
+    /// <summary>
     /// Creates a new user (legacy method for backward compatibility).
     /// </summary>
     [Obsolete("Use Register method instead for new user creation with authentication.")]
