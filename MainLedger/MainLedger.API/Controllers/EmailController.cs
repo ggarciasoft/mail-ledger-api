@@ -11,7 +11,7 @@ namespace MainLedger.API.Controllers;
 [ApiController]
 [Route("api/email")]
 [Authorize]
-public class EmailController(IMediator _mediator, ILogger<EmailController> _logger) : ControllerBase
+public class EmailController(IMediator _mediator, ILogger<EmailController> _logger, IConfiguration _configuration) : ControllerBase
 {
     /// <summary>
     /// Get OAuth authorization URL for email provider
@@ -42,14 +42,14 @@ public class EmailController(IMediator _mediator, ILogger<EmailController> _logg
             if (!string.IsNullOrEmpty(error))
             {
                 _logger.LogError("OAuth error: {Error} - {Description}", error, error_description);
-                return Redirect($"http://localhost:5173/settings?error={Uri.EscapeDataString(error_description ?? error)}");
+                return Redirect($"{_configuration["FrontendUrl"]}/integrations?error={Uri.EscapeDataString(error_description ?? error)}");
             }
 
             // Validate required parameters
             if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
             {
                 _logger.LogError("Missing required parameters: code or state");
-                return Redirect($"http://localhost:5173/settings?error=invalid_callback_parameters");
+                return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=invalid_callback_parameters");
             }
 
             var result = await _mediator.Send(new ConnectEmailProviderCommand(provider, code, state));
@@ -57,17 +57,17 @@ public class EmailController(IMediator _mediator, ILogger<EmailController> _logg
             if (!result.IsSuccess)
             {
                 _logger.LogError("Failed to connect {Provider}: {Error}", provider, result.Error);
-                return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+                return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=email_connection_failed");
             }
 
             // Redirect to settings page with success
-            return Redirect("http://localhost:5173/settings?email_connected=true");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?email_connected=true");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling {Provider} callback", provider);
             // Redirect to settings with error
-            return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=email_connection_failed");
         }
     }
 
@@ -86,13 +86,13 @@ public class EmailController(IMediator _mediator, ILogger<EmailController> _logg
             var result = await _mediator.Send(new ConnectEmailProviderCommand(provider, request.Code, request.State));
 
             // Redirect to settings page with success
-            return Redirect("http://localhost:5173/settings?email_connected=true");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?email_connected=true");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling {provider} callback", provider);
             // Redirect to settings with error
-            return Redirect($"http://localhost:5173/settings?error=email_connection_failed");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=email_connection_failed");
         }
     }
 

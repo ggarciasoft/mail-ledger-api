@@ -18,6 +18,7 @@ public class GmailController : ControllerBase
     private readonly ISubscriptionService _subscriptionService;
     private readonly ILogger<GmailController> _logger;
     private readonly MainLedger.Application.Common.Interfaces.IJobManagementService _jobManagementService;
+    private readonly IConfiguration _configuration;
 
     public GmailController(
         IGmailService gmailService,
@@ -25,7 +26,8 @@ public class GmailController : ControllerBase
         ICurrentUserService currentUserService,
         ISubscriptionService subscriptionService,
         ILogger<GmailController> logger,
-        MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService
+        MainLedger.Application.Common.Interfaces.IJobManagementService jobManagementService,
+        IConfiguration configuration
     )
     {
         _gmailService = gmailService;
@@ -34,6 +36,7 @@ public class GmailController : ControllerBase
         _subscriptionService = subscriptionService;
         _logger = logger;
         _jobManagementService = jobManagementService;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -79,7 +82,7 @@ public class GmailController : ControllerBase
             if (!canConnect)
             {
                 // Redirect to settings with error
-                return Redirect("http://localhost:5173/settings?error=gmail_limit_reached");
+                return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=gmail_limit_reached");
             }
 
             var connection = await _gmailService.HandleCallbackAsync(
@@ -89,13 +92,13 @@ public class GmailController : ControllerBase
             );
 
             // Redirect to settings page with success
-            return Redirect("http://localhost:5173/settings?gmail_connected=true");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?gmail_connected=true");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling Gmail callback for user {UserId}", userId);
             // Redirect to settings with error
-            return Redirect($"http://localhost:5173/settings?error=gmail_connection_failed");
+            return Redirect($"{_configuration["FrontendUrl"]}/integrations?error=gmail_connection_failed");
         }
     }
 
