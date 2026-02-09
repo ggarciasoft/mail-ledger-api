@@ -117,7 +117,7 @@ public class SubscriptionsController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
-
+/*
     /// <summary>
     /// Upgrade the current user's subscription to a new plan.
     /// </summary>
@@ -154,6 +154,7 @@ public class SubscriptionsController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+    */
 
     /// <summary>
     /// Cancel the current user's subscription.
