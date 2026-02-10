@@ -1,5 +1,6 @@
 using Hangfire;
 using Hangfire.PostgreSql;
+using MainLedger.API.Middleware;
 using MainLedger.Domain.Repositories;
 using MainLedger.Infrastructure.Persistence;
 using MainLedger.Infrastructure.Persistence.Repositories;
@@ -199,6 +200,7 @@ namespace MainLedger.API
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.EmailSyncBackgroundJob>();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ClassificationBackgroundJob>();
             builder.Services.AddScoped<MainLedger.Application.BackgroundJobs.ExtractionBackgroundJob>();
+            builder.Services.AddScoped<MainLedger.Infrastructure.BackgroundJobs.LogCleanupBackgroundJob>();
 
             // Register Workflow Service
             builder.Services.AddScoped<
@@ -492,12 +494,22 @@ namespace MainLedger.API
                     job => job.ExecuteAsync(),
                     "*/5 * * * *" // Every 5 minutes
                 );
+
+                // Log cleanup job - runs weekly on Sundays at 2 AM
+                Hangfire.RecurringJob.AddOrUpdate<MainLedger.Infrastructure.BackgroundJobs.LogCleanupBackgroundJob>(
+                    "log-cleanup",
+                    job => job.ExecuteAsync(),
+                    Hangfire.Cron.Weekly(DayOfWeek.Sunday, 2) // Every Sunday at 2:00 AM
+                );
             }
 
             app.UseHttpsRedirection();
 
             // HTTP Request/Response Logging (configurable via appsettings.json)
             app.UseMiddleware<MainLedger.API.Middleware.HttpLoggingMiddleware>();
+
+            // Add log context middleware to capture HTTP context for error logging
+            app.UseLogContext();
 
             // Enable CORS
             app.UseCors("AllowFrontend");
